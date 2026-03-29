@@ -1,68 +1,128 @@
-/* ====== STYLES CHỈ CÒN CHO OVERLAY TRÊN YOUTUBE ====== */
-
-/* Overlay tràn toàn bộ diện tích của Thumbnail giúp dễ nhìn và bấm */
+/* Overlay chính: mỏng và gọn hơn */
 .yt-ext-overlay {
     position: absolute;
-    top: 8px;
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    background: rgba(15, 15, 15, 0.75);
-    border: 3px solid #3b82f6;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.2);
+    border: 2px solid rgba(34, 197, 94, 0.5);
     border-radius: 12px;
     z-index: 99;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    gap: 15px;
+    justify-content: space-between;
+    padding: 10px;
     pointer-events: auto;
     box-sizing: border-box;
-    backdrop-filter: blur(4px);
-    transition: opacity 0.3s ease;
-  }
-  
-  .yt-ext-overlay.valid {
-    border-color: #22c55e;
-    background: rgba(15, 15, 15, 0.6);
-  }
-  
-  .yt-ext-overlay.invalid {
-    border-color: #ef4444;
-    background: rgba(15, 15, 15, 0.85);
-    opacity: 0.9;
-  }
-  
-  .yt-ext-download-btn {
+    backdrop-filter: blur(1px);
+    transition: all 0.3s ease;
+}
+
+/* Hiệu ứng mờ thông tin (bỏ opacity) */
+.yt-ext-overlay.fade-info {
+    border-color: transparent;
+    background: rgba(0, 0, 0, 0.05); /* Cực mờ */
+    backdrop-filter: none;
+}
+
+.yt-ext-overlay.fade-info > *:not(.yt-ext-opacity-control) {
+    opacity: 0.05; /* Làm mờ mọi thứ trừ bộ điều khiển opacity */
+    pointer-events: none;
+}
+
+/* Cột bên trái: Checkbox + List Info */
+.yt-ext-left-area {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-start;
+}
+
+.yt-ext-top-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.yt-ext-checkbox {
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    accent-color: #22c55e;
+}
+
+.yt-ext-quality-tag {
+    background: #eab308;
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.yt-ext-info-item {
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+/* Góc phải trên: Nút download */
+.yt-ext-right-top {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
+.yt-ext-dl-btn-small {
     background: #22c55e;
-    color: #ffffff;
+    color: white;
     border: none;
     border-radius: 8px;
-    padding: 12px 24px;
+    width: 44px;
+    height: 38px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     cursor: pointer;
-    font-size: 16px;
-    font-weight: 800;
+    font-size: 20px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-    transition: all 0.2s ease;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  
-  .yt-ext-download-btn:hover {
+    transition: transform 0.2s;
+}
+
+.yt-ext-dl-btn-small:hover {
+    transform: scale(1.1);
     background: #16a34a;
-    transform: scale(1.05);
-    box-shadow: 0 6px 14px rgba(0,0,0,0.6);
-  }
-  
-  .yt-ext-reject-reason {
-    font-size: 16px;
-    color: #fca5a5;
-    font-weight: 800;
-    text-align: center;
-    padding: 0 10px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
-    line-height: 1.4;
-  }
+}
+
+/* Góc phải dưới: Control Opacity */
+.yt-ext-opacity-control {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(30, 30, 30, 0.85);
+    padding: 4px 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #fff;
+    font-size: 10px;
+    font-weight: bold;
+    border: 1px solid rgba(255,255,255,0.2);
+    z-index: 102; /* Luôn nổi */
+    opacity: 1 !important; /* Luôn sáng */
+}
+
+.yt-ext-opacity-toggle {
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
+}
   
   ytd-thumbnail {
     position: relative !important;

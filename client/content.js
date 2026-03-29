@@ -44,7 +44,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.action === "BULK_DOWNLOAD") {
         let count = 0;
         bulkDownloadItems.forEach((btnElement, url) => {
-            if (btnElement.innerText.includes('TẢI')) {
+            // Kiểm tra nếu nút vẫn đang ở trạng thái sẵn sàng (chưa bị disabled do đang tải)
+            if (!btnElement.disabled) {
                 sendDownloadRequest(url, currentConfig.quality || '1080', btnElement);
                 count++;
             }
@@ -246,25 +247,104 @@ function processVideos() {
             if (isValid) {
                 let thumbnail = item.querySelector('ytd-thumbnail');
                 if (thumbnail) {
-                    let overlay = document.createElement('div');
-                    overlay.className = 'yt-ext-overlay valid';
+                    const overlay = document.createElement('div');
+                    overlay.className = 'yt-ext-overlay';
 
-                    let btn = document.createElement('button');
-                    btn.className = 'yt-ext-download-btn';
-                    btn.innerText = '⬇️ TẢI ' + currentConfig.quality + 'P';
+                    // --- CỘT TRÁI (LEFT AREA) ---
+                    const leftArea = document.createElement('div');
+                    leftArea.className = 'yt-ext-left-area';
 
-                    btn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        // Download đơn lẻ khi ấn vào Thumbnail Valid
-                        sendDownloadRequest(url, currentConfig.quality, btn);
-                    });
+                    // Dòng 1: Checkbox + Quality
+                    const topLeft = document.createElement('div');
+                    topLeft.className = 'yt-ext-top-left';
 
-                    overlay.appendChild(btn);
+                    const mainCheckbox = document.createElement('input');
+                    mainCheckbox.type = 'checkbox';
+                    mainCheckbox.className = 'yt-ext-checkbox';
+                    mainCheckbox.checked = true;
+
+                    const qualityTag = document.createElement('div');
+                    qualityTag.className = 'yt-ext-quality-tag';
+                    qualityTag.innerText = (currentConfig.quality || '1080') + 'P';
+
+                    topLeft.appendChild(mainCheckbox);
+                    topLeft.appendChild(qualityTag);
+                    leftArea.appendChild(topLeft);
+
+                    // Các dòng thông tin tiếp theo
+                    const createInfoLine = (icon, text) => {
+                        const line = document.createElement('div');
+                        line.className = 'yt-ext-info-item';
+                        line.innerHTML = `<span>${icon}</span> <span>${text}</span>`;
+                        return line;
+                    };
+
+                    leftArea.appendChild(createInfoLine('👁️', viewsStr.trim()));
+                    leftArea.appendChild(createInfoLine('🕒', durationStr));
+                    leftArea.appendChild(createInfoLine('📅', timeAgoStr.trim()));
+
+                    overlay.appendChild(leftArea);
+
+                    // --- GÓC PHẢI TRÊN (RIGHT TOP) ---
+                    const rightTop = document.createElement('div');
+                    rightTop.className = 'yt-ext-right-top';
+
+                    const dlBtn = document.createElement('button');
+                    dlBtn.className = 'yt-ext-dl-btn-small';
+                    dlBtn.innerHTML = '⬇️';
+                    dlBtn.title = "Tải video này";
+
+                    rightTop.appendChild(dlBtn);
+                    overlay.appendChild(rightTop);
+
+                    // --- GÓC PHẢI DƯỚI (OPACITY CONTROL) ---
+                    const opacityCtrl = document.createElement('div');
+                    opacityCtrl.className = 'yt-ext-opacity-control';
+                    opacityCtrl.innerHTML = `<span>Bỏ Opacity</span>`;
+
+                    const opacityToggle = document.createElement('input');
+                    opacityToggle.type = 'checkbox';
+                    opacityToggle.className = 'yt-ext-opacity-toggle';
+                    
+                    opacityCtrl.appendChild(opacityToggle);
+                    overlay.appendChild(opacityCtrl);
+
                     thumbnail.appendChild(overlay);
 
-                    // Lưu lại Node Btn vào Map dành cho lệnh Bulk Download từ Popup ấn xuống
-                    bulkDownloadItems.set(url, btn);
+                    // --- LOGIC TƯƠNG TÁC ---
+                    
+                    // Nút download đơn lẻ
+                    dlBtn.addEventListener('click', (e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        // Gửi lệnh tải
+                        sendDownloadRequest(url, currentConfig.quality, dlBtn);
+                        
+                        // Nếu góc trái trên đang chọn -> Tự động bỏ chọn
+                        if (mainCheckbox.checked) {
+                            mainCheckbox.checked = false;
+                            bulkDownloadItems.delete(url);
+                        }
+                    });
+
+                    // Checkbox chọn hàng loạt
+                    bulkDownloadItems.set(url, dlBtn); 
+                    mainCheckbox.addEventListener('change', () => {
+                        if (mainCheckbox.checked) {
+                            bulkDownloadItems.set(url, dlBtn);
+                        } else {
+                            bulkDownloadItems.delete(url);
+                        }
+                    });
+
+                    // Toggle mờ thông tin (Bỏ Opacity)
+                    opacityToggle.addEventListener('change', () => {
+                        if (opacityToggle.checked) {
+                            overlay.classList.add('fade-info');
+                        } else {
+                            overlay.classList.remove('fade-info');
+                        }
+                    });
+
                     validFoundCount++;
                 }
             }
