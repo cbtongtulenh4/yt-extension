@@ -1,33 +1,69 @@
-/* Overlay chính: mỏng và gọn hơn */
+/* Overlay chính: mặc định không viền */
 .yt-ext-overlay {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.4); /* Đậm hơn chút để nổi bật text */
-    border: 3px solid rgba(255, 255, 255, 0.2); /* Mặc định trắng mờ */
+    background: rgba(0, 0, 0, 0.4); 
+    border: 3px solid transparent;
     border-radius: 12px;
     z-index: 99;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 12px; /* Tăng padding */
+    padding: 12px;
     pointer-events: auto;
     box-sizing: border-box;
     backdrop-filter: blur(2px);
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
 }
 
-/* Phân biệt Valid và Invalid */
-.yt-ext-overlay.is-valid {
-    border-color: rgba(34, 197, 94, 0.8);
-    background: rgba(0, 0, 0, 0.3);
+/* Ép thumbnail hiển thị phần nhô ra */
+.yt-ext-thumbnail-container {
+    overflow: visible !important;
 }
 
-.yt-ext-overlay.is-invalid {
-    border-color: rgba(239, 68, 68, 0.5);
-    background: rgba(0, 0, 0, 0.5);
+/* Hashtag nhô lên trên đỉnh */
+.yt-ext-hashtag {
+    position: absolute;
+    top: -18px; /* Nhô hẳn lên trên */
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: linear-gradient(135deg, #10b981, #059669); /* Emerald gradient */
+    color: white;
+    padding: 4px 18px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.5);
+    z-index: 110;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    white-space: nowrap;
 }
 
-/* Hiệu ứng mờ thông tin (bỏ opacity) */
+.item-selected .yt-ext-hashtag {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Phân biệt Chọn và Không Chọn (Selection State) */
+.yt-ext-overlay.item-selected {
+    border-color: rgba(34, 197, 94, 0.95) !important;
+    background: rgba(0, 0, 0, 0.15);
+    box-shadow: inset 0 0 15px rgba(34, 197, 94, 0.3);
+    filter: none;
+}
+
+.yt-ext-overlay.item-unselected {
+    border-color: transparent !important;
+    background: rgba(0, 0, 0, 0.55);
+    filter: grayscale(0.6);
+}
+
+/* Trạng thái bỏ Opacity - Giữ nguyên không thay đổi */
 .yt-ext-overlay.fade-info {
     border-color: transparent !important;
     background: rgba(0, 0, 0, 0.05);
@@ -43,7 +79,7 @@
 .yt-ext-left-area {
     display: flex;
     flex-direction: column;
-    gap: 8px; /* Tăng khoảng cách */
+    gap: 8px;
     align-items: flex-start;
 }
 

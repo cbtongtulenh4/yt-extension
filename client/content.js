@@ -119,6 +119,11 @@ function resetProcessedItems() {
         delete el.dataset.ytExtProcessed;
         delete el.dataset.ytExtUrl;
     });
+
+    // Xóa bỏ class hỗ trợ overflow trên thumbnail
+    document.querySelectorAll('.yt-ext-thumbnail-container').forEach(el => {
+        el.classList.remove('yt-ext-thumbnail-container');
+    });
 }
 
 function parseDurationStr(timeStr) {
@@ -247,9 +252,18 @@ function processVideos() {
             // --- TẠO OVERLAY CHO TẤT CẢ CÁC VIDEO (Dù hợp lệ hay không) ---
             // thumbnail đã được declare ở trên rồi, chỉ cần dùng lại
             if (thumbnail) {
+                // Thêm class để hỗ trợ hashtag nhô lên (overflow: visible)
+                thumbnail.classList.add('yt-ext-thumbnail-container');
+
                 const overlay = document.createElement('div');
-                // Gắn thêm class để phân biệt màu sắc
-                overlay.className = 'yt-ext-overlay ' + (isValid ? 'is-valid' : 'is-invalid');
+                // Khởi tạo Class ban đầu dựa trên Validity và Selection State
+                overlay.className = 'yt-ext-overlay ' + (isValid ? 'is-valid item-selected' : 'is-invalid item-unselected');
+
+                // --- HASHTAG NHÔ LÊN (PROTRUSION) ---
+                const hashtag = document.createElement('div');
+                hashtag.className = 'yt-ext-hashtag';
+                hashtag.innerText = '#READY';
+                overlay.appendChild(hashtag);
 
                 // --- CỘT TRÁI (LEFT AREA) ---
                 const leftArea = document.createElement('div');
@@ -314,6 +328,17 @@ function processVideos() {
                 thumbnail.appendChild(overlay);
 
                 // --- LOGIC TƯƠNG TÁC ---
+
+                // Hàm Helper để đồng bộ trạng thái màu của Overlay
+                const updateSelectionStatus = (selected) => {
+                    if (selected) {
+                        overlay.classList.add('item-selected');
+                        overlay.classList.remove('item-unselected');
+                    } else {
+                        overlay.classList.remove('item-selected');
+                        overlay.classList.add('item-unselected');
+                    }
+                };
                 
                 // Nút download đơn lẻ
                 dlBtn.addEventListener('click', (e) => {
@@ -323,6 +348,7 @@ function processVideos() {
                     if (mainCheckbox.checked) {
                         mainCheckbox.checked = false;
                         bulkDownloadItems.delete(url);
+                        updateSelectionStatus(false);
                     }
                 });
 
@@ -334,7 +360,9 @@ function processVideos() {
                 }
 
                 mainCheckbox.addEventListener('change', () => {
-                    if (mainCheckbox.checked) {
+                    const isChecked = mainCheckbox.checked;
+                    updateSelectionStatus(isChecked);
+                    if (isChecked) {
                         bulkDownloadItems.set(url, dlBtn);
                     } else {
                         bulkDownloadItems.delete(url);
