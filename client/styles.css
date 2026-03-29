@@ -1,0 +1,143 @@
+/* ====== STYLES CHỈ CÒN CHO OVERLAY TRÊN YOUTUBE ====== */
+
+/* Overlay tràn toàn bộ diện tích của Thumbnail giúp dễ nhìn và bấm */
+.yt-ext-overlay {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    background: rgba(15, 15, 15, 0.75);
+    border: 3px solid #3b82f6;
+    border-radius: 12px;
+    z-index: 99;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    pointer-events: auto;
+    box-sizing: border-box;
+    backdrop-filter: blur(4px);
+    transition: opacity 0.3s ease;
+  }
+  
+  .yt-ext-overlay.valid {
+    border-color: #22c55e;
+    background: rgba(15, 15, 15, 0.6);
+  }
+  
+  .yt-ext-overlay.invalid {
+    border-color: #ef4444;
+    background: rgba(15, 15, 15, 0.85);
+    opacity: 0.9;
+  }
+  
+  .yt-ext-download-btn {
+    background: #22c55e;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 800;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .yt-ext-download-btn:hover {
+    background: #16a34a;
+    transform: scale(1.05);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.6);
+  }
+  
+  .yt-ext-reject-reason {
+    font-size: 16px;
+    color: #fca5a5;
+    font-weight: 800;
+    text-align: center;
+    padding: 0 10px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
+    line-height: 1.4;
+  }
+  
+  ytd-thumbnail {
+    position: relative !important;
+  }
+  
+/* --- MANUAL SELECTION (CHỌN THỦ CÔNG) --- */
+body.yt-ext-manual-mode ytd-thumbnail {
+    cursor: copy !important;
+}
+
+/* Khung Viền mờ báo hiệu khi Hover chuột vào video */
+body.yt-ext-manual-mode ytd-thumbnail::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    box-shadow: inset 0 0 0 4px transparent;
+    transition: box-shadow 0.2s;
+    z-index: 100;
+    pointer-events: none;
+    border-radius: 12px;
+}
+
+body.yt-ext-manual-mode ytd-thumbnail:hover::before {
+    box-shadow: inset 0 0 0 6px #3b82f6 !important; /* Xanh dương khi hover */
+}
+
+/* Frame khi video Đã Được Chọn */
+.yt-ext-manual-selected::after {
+    content: '✅ ĐÃ CHỌN';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #22c55e;
+    color: white;
+    font-weight: 800;
+    font-size: 15px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    z-index: 101;
+    pointer-events: none;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.6);
+}
+
+.yt-ext-manual-selected::before {
+    box-shadow: inset 0 0 0 6px #22c55e !important; /* Xanh lá khi đã click chọn */
+}
+
+/* Toast Thông báo trôi nổi dưới màn hình */
+#yt-ext-toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(24, 24, 27, 0.95);
+    color: #fff;
+    padding: 14px 28px;
+    border-radius: 8px;
+    border: 2px solid #3b82f6;
+    font-size: 16px;
+    font-weight: bold;
+    z-index: 9999999;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    display: none;
+    pointer-events: none;
+    text-align: center;
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
+#yt-ext-toast.show {
+    display: block;
+    animation: slideUp 0.3s ease-out forwards;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}

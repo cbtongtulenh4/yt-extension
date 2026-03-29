@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>YT Smart Downloader</title>
+    <style>
+        body {
+            width: 350px;
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #18181b; 
+            color: #f4f4f5;
+        }
+        h2 {
+            margin: 0 0 16px 0;
+            font-size: 18px;
+            color: #ffffff;
+            text-align: center;
+            border-bottom: 1px solid #3f3f46;
+            padding-bottom: 10px;
+            text-transform: uppercase;
+        }
+        .form-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        label {
+            font-size: 13px;
+            font-weight: 500;
+            color: #e4e4e7;
+        }
+        input[type="number"], input[type="text"], select {
+            background-color: #27272a;
+            border: 1px solid #52525b;
+            color: #ffffff;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        input[type="number"]:focus, input[type="text"]:focus, select:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+        select { width: 130px; }
+        .inline-inputs {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .inline-inputs input { width: 45px; text-align: center; }
+        
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        input[type="checkbox"] {
+            accent-color: #3b82f6;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        
+        .status-container {
+            text-align: center;
+            margin: 16px 0 12px 0;
+            font-weight: bold;
+            font-size: 14px;
+            padding: 10px;
+            background: #27272a;
+            border-radius: 8px;
+        }
+        .status-idle { color: #a1a1aa; }
+        .status-active { color: #4ade80; text-shadow: 0 0 5px rgba(74, 222, 128, 0.3); }
+        
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #22c55e;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 10px;
+        }
+        button:hover { 
+            background: #16a34a; 
+            transform: translateY(-1px); 
+            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+        }
+        button:active { transform: translateY(0); }
+
+        .hint-text {
+            font-size: 11px;
+            color: #a1a1aa;
+            text-align: center;
+            margin-top: 12px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <h2>Cài đặt Bộ Lọc Tự Động</h2>
+    
+    <div class="form-row">
+        <label>Độ phân giải (Quality):</label>
+        <select id="config-quality">
+            <option value="2160">2160p (4K)</option>
+            <option value="1440">1440p (2K)</option>
+            <option value="1080" selected>1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+        </select>
+    </div>
+    
+    <div class="form-row">
+        <label>Độ dài (phút):</label>
+        <div class="inline-inputs">
+            <input type="number" id="config-min-len" value="0" placeholder="Từ">
+            <span>-</span>
+            <input type="number" id="config-max-len" value="60" placeholder="Đến">
+        </div>
+    </div>
+    
+    <div class="form-row">
+        <label class="checkbox-label">
+            <input type="checkbox" id="config-check-views" checked>
+            View Tối thiểu:
+        </label>
+        <input type="text" id="config-min-view" value="100K" placeholder="VD: 50K..." style="width: 80px;">
+    </div>
+    
+    <div class="form-row">
+        <label class="checkbox-label">
+            <input type="checkbox" id="config-check-time" checked>
+            Số ngày Tối đa:
+        </label>
+        <input type="number" id="config-max-days" value="30" style="width: 80px;">
+    </div>
+
+    <!-- UPDATE 1: Giới hạn số lượng tự động max -->
+    <div class="form-row">
+        <label title="0 là TẮT tự tìm. Mở > 0 để bắt đầu Auto quét">Số lượng Auto Tìm (0 = Tắt):</label>
+        <input type="number" id="config-max-count" value="0" style="width: 80px;" min="0">
+    </div>
+    
+    <div class="status-container">
+        Cầm dò Auto-Filter: <span id="scan-status" class="status-idle">💤 Đã Tắt</span>
+    </div>
+
+    <button id="bulk-download-btn">🚀 TẢI CÁC VIDEO HỢP LỆ</button>
+    
+    <div class="hint-text">
+        💡 Mọi thay đổi cấu hình sẽ được Auto Cập Nhật.<br>
+        Nhấn <b>Alt + T</b> ngoài web để Cầm Chuột Chọn Video Trực Tiếp.
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
