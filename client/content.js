@@ -245,15 +245,7 @@ function updateQualityDropdown(select, qualities) {
 
 // Hàm duyệt tìm video
 function processVideos() {
-    // Nếu maxCount bằng 0 -> TẮT TÍNH NĂNG TỰ ĐỘNG QUÉT
-    if (currentConfig.maxCount === 0) {
-        return;
-    }
-
-    // Nếu đạt giới hạn cấu hình Max, Không duyệt tìm kiếm video mới nữa
-    if (validFoundCount >= currentConfig.maxCount) {
-        return;
-    }
+    // Đã bỏ giới hạn maxCount để quét không giới hạn
 
     const videoSelectors = [
         'ytd-rich-item-renderer',
@@ -266,7 +258,7 @@ function processVideos() {
 
     items.forEach(item => {
         // Chặn sớm trong loop
-        if (currentConfig.maxCount === 0 || validFoundCount >= currentConfig.maxCount) return;
+        // Đã bỏ chặn MaxCount bên trong loop
 
         try {
             let titleEl = item.querySelector('a#video-title, a#video-title-link');
@@ -328,6 +320,14 @@ function processVideos() {
             if (currentConfig.checkTime && daysAgo > currentConfig.maxDays) {
                 isValid = false;
                 rejectReasons.push(`Quá Cũ (${daysAgo} ngày)`);
+            }
+
+            // MỚI: Nếu đã tìm đủ số lượng video Hợp lệ theo cấu hình, 
+            // thì những video tiếp theo (dù thỏa mãn) cũng sẽ bị coi là Không Hợp Lệ 
+            // để chỉ hiện nút Quality thay vì tự động fetch.
+            if (isValid && currentConfig.maxCount > 0 && validFoundCount >= currentConfig.maxCount) {
+                isValid = false;
+                rejectReasons.push(`Đã đạt Max (${currentConfig.maxCount})`);
             }
 
             // --- TẠO OVERLAY CHO TẤT CẢ CÁC VIDEO (Dù hợp lệ hay không) ---
