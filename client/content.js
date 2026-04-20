@@ -164,7 +164,7 @@ function parseTimeAgoStr(timeAgoStr) {
     return 999999;
 }
 
-async function fetchVideoQualitiesFromServer(url, qualitySelect) {
+async function fetchVideoQualitiesFromClient(url, qualitySelect) {
     if (qualitySelect.dataset.loading === "true" || qualitySelect.dataset.fetched === "true") return;
 
     if (videoQualitiesCache.has(url)) {
@@ -173,43 +173,49 @@ async function fetchVideoQualitiesFromServer(url, qualitySelect) {
         return;
     }
 
-    console.log("[YT-EXT] Fetching video qualities from server for URL:", url);
-    
-    // Lưu lại nội dung cũ phòng trường hợp lỗi
+    console.log("[YT-EXT] Fetching video qualities from Client (YouTube HTML) for URL:", url);
+
     const oldHTML = qualitySelect.innerHTML;
     qualitySelect.innerHTML = '<option value="">⏳...</option>';
     qualitySelect.dataset.loading = "true";
     qualitySelect.classList.add('loading');
     qualitySelect.disabled = true;
 
-    const port = 8000;
     try {
-        const apiBase = `http://127.0.0.1:${port}`;
-        const response = await fetch(`${apiBase}/api/qualities`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: url }),
-            signal: AbortSignal.timeout(10000) // Tăng timeout lên 10s cho chắc
-        });
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Fetch failed");
+        const html = await response.text();
 
-        if (response.ok) {
-            const data = await response.json();
-            if (data.available_qualities && data.available_qualities.length > 0) {
-                console.log(`[YT-EXT] Đã lấy được quality từ server (Port ${port}):`, data.available_qualities);
-                videoQualitiesCache.set(url, data.available_qualities);
-                updateQualityDropdown(qualitySelect, data.available_qualities);
-                qualitySelect.dataset.fetched = "true";
-                return;
+        const regex = /ytInitialPlayerResponse\s*=\s*({.+?});/;
+        const match = html.match(regex);
+
+        if (match) {
+            const data = JSON.parse(match[1]);
+            const streamingData = data.streamingData;
+            if (streamingData && streamingData.adaptiveFormats) {
+                const heights = streamingData.adaptiveFormats
+                    .map(item => item.height)
+                    .filter(h => h !== undefined);
+                const uniqueQualities = [...new Set(heights)].sort((a, b) => b - a);
+
+                if (uniqueQualities.length > 0) {
+                    console.log("[YT-EXT] Đã lấy được quality từ Client:", uniqueQualities);
+                    videoQualitiesCache.set(url, uniqueQualities);
+                    updateQualityDropdown(qualitySelect, uniqueQualities);
+                    qualitySelect.dataset.fetched = "true";
+                    return;
+                }
             }
         }
+        throw new Error("Data not found");
     } catch (err) {
-        console.warn("[YT-EXT] Lỗi khi lấy chất lượng:", err);
+        console.warn("[YT-EXT] Lỗi khi lấy chất lượng từ Client:", err);
     } finally {
         qualitySelect.dataset.loading = "false";
         qualitySelect.classList.remove('loading');
         qualitySelect.disabled = false;
         if (qualitySelect.dataset.fetched !== "true") {
-            qualitySelect.innerHTML = oldHTML; // Trả lại nếu fetch thất bại để user có thể click lại
+            qualitySelect.innerHTML = oldHTML;
         }
     }
 }
@@ -251,9 +257,9 @@ function processVideos() {
 
     const videoSelectors = [
         'ytd-rich-item-renderer',
-        'ytd-video-renderer',
-        'ytd-grid-video-renderer',
-        'ytd-compact-video-renderer'
+        // 'ytd-video-renderer',
+        // 'ytd-grid-video-renderer',
+        // 'ytd-compact-video-renderer'
     ];
 
     const items = document.querySelectorAll(videoSelectors.join(', '));
@@ -353,36 +359,22 @@ function processVideos() {
                 mainCheckbox.className = 'yt-ext-checkbox';
                 mainCheckbox.checked = isValid;
 
-                // --- PHÁT HIỆN CHẤT LƯỢNG TỐI ĐA TỪ BADGE (4K/HD) ---
-                let maxDetectedP = 720; // Mặc định là 720 nếu không thấy nhãn HD/4K
-                const badges = item.querySelectorAll('ytd-badge-supported-renderer, .badge-style-type-simple');
-                badges.forEach(b => {
-                    const txt = b.innerText.toUpperCase();
-                    if (txt.includes('4K')) maxDetectedP = 2160;
-                    else if (txt.includes('8K')) maxDetectedP = 4320;
-                    else if (txt.includes('HD')) maxDetectedP = 1080;
-                });
-
                 const qualitySelect = document.createElement('select');
                 qualitySelect.className = 'yt-ext-quality-select';
 
-                // Các mức chất lượng hệ thống hỗ trợ
-                const allQualities = [2160, 1440, 1080, 720, 480, 360];
-                // Lọc lấy các mức <= maxDetectedP
-                const availableQualities = allQualities.filter(q => q <= maxDetectedP);
-
-                availableQualities.forEach(q => {
+                if (isValid) {
+                    // Kịch bản 1: Tự động - Video hợp lệ hiện Loading...
                     const opt = document.createElement('option');
-                    opt.value = q.toString();
-                    opt.textContent = q + 'P';
-
-                    // Ưu tiên chọn Quality từ Config, nhưng nếu Config cao hơn maxDetectedP thì chọn maxDetectedP
-                    let targetDefault = parseInt(currentConfig.quality || '1080');
-                    if (targetDefault > maxDetectedP) targetDefault = maxDetectedP;
-
-                    if (q === targetDefault) opt.selected = true;
+                    opt.value = "";
+                    opt.textContent = "⏳...";
                     qualitySelect.appendChild(opt);
-                });
+                } else {
+                    // Kịch bản 2: Thủ công - Video khác hiện nút "Chọn chất lượng"
+                    const opt = document.createElement('option');
+                    opt.value = "";
+                    opt.textContent = "Quality";
+                    qualitySelect.appendChild(opt);
+                }
 
                 topLeft.appendChild(mainCheckbox);
                 topLeft.appendChild(qualitySelect);
@@ -432,16 +424,15 @@ function processVideos() {
                 // Click vào select để fetch thủ công nếu chưa có dữ liệu
                 qualitySelect.addEventListener('mousedown', (e) => {
                     if (qualitySelect.dataset.fetched !== "true" && qualitySelect.dataset.loading !== "true") {
-                        // Nếu chưa lấy quality, chặn mở menu và đi fetch
+                        // Nếu chưa lấy quality, chặn mở menu và đi fetch (Kịch bản thủ công)
                         e.preventDefault();
-                        fetchVideoQualitiesFromServer(url, qualitySelect);
+                        fetchVideoQualitiesFromClient(url, qualitySelect);
                     }
                 });
 
                 // --- GỌI SERVER ĐỂ LẤY CHẤT LƯỢNG CHÍNH XÁC ---
-                // Chỉ tự động gửi request nếu video HỢP LỆ (thỏa mãn filter)
                 if (isValid) {
-                    fetchVideoQualitiesFromServer(url, qualitySelect);
+                    fetchVideoQualitiesFromClient(url, qualitySelect);
                 }
 
                 // Hàm Helper để đồng bộ trạng thái màu của Overlay
