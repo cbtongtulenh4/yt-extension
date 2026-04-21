@@ -200,6 +200,11 @@ def process_download(url: str, quality: str = "1080", output_dir: str = "Downloa
     Hàm xử lý tải video thực tế.
     Tham khảo logic validation metadata và cấu hình ydl_opts từ yt_url.py
     """
+    # Trích xuất ID ngay từ đầu để sử dụng cho cơ chế rollback/history
+    import re
+    vid_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", url)
+    vid = vid_match.group(1) if vid_match else url
+
     if getattr(sys, 'frozen', False):
         base_dir = os.path.dirname(sys.executable)
     else:
@@ -263,7 +268,14 @@ def process_download(url: str, quality: str = "1080", output_dir: str = "Downloa
     except Exception as e:
         print(f"[ERROR] Failed {url}: {str(e)}")
         download_status[url] = {"status": "error", "message": str(e)}
+        # Xóa khỏi active_download_ids để UI có thể bỏ nhãn Downloaded (Cơ chế Rollback)
+        if vid in active_download_ids:
+            active_download_ids.discard(vid)
         return False
+    finally:
+        # Khi đã xong (hoặc đã ghi vào history vĩnh viễn), dọn dẹp active_ids
+        if vid in active_download_ids:
+            active_download_ids.discard(vid)
 
 def listener_worker():
     """

@@ -36,8 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let btn = document.getElementById('bulk-download-btn');
         let oldText = btn.textContent;
         btn.textContent = "🚀 ĐANG GỬI LỆNH TẢI...";
-        
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
             if (tabs.length > 0 && tabs[0].url.includes("youtube.com")) {
                 chrome.tabs.sendMessage(tabs[0].id, { action: "BULK_DOWNLOAD" }, (response) => {
                     if (response && response.count !== undefined) {
@@ -84,18 +84,18 @@ function saveAndSyncConfig() {
         maxCount: safeMaxVal,
         onlyValid: document.getElementById('config-only-valid').checked
     };
-    
+
     // Cập nhật nhãn trạng thái cục bộ ngay lập tức
     updateStatusLabel(safeMaxVal);
 
     chrome.storage.local.set({ ytConfig: newConfig }, () => {
         // Sync xuống Tab đang mở
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
             if (tabs.length > 0 && tabs[0].url.includes("youtube.com")) {
                 chrome.tabs.sendMessage(tabs[0].id, {
                     action: "UPDATE_CONFIG",
                     config: newConfig
-                }).catch(() => {});
+                }).catch(() => { });
             }
         });
     });

@@ -517,12 +517,8 @@ async function processVideos() {
 }
 
 function sendDownloadRequest(url, quality, btnElement) {
-    if (btnElement) {
-        btnElement.innerText = '⏳ ĐANG GỬI...';
-        btnElement.style.background = '#eab308';
-        btnElement.disabled = true;
-    }
-
+    // Không thay đổi trạng thái nút bấm ở đây nữa theo yêu cầu - Giữ nguyên giao diện
+    
     fetch('http://127.0.0.1:8000/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -533,19 +529,55 @@ function sendDownloadRequest(url, quality, btnElement) {
             return res.json();
         })
         .then(data => {
-            if (btnElement) {
-                btnElement.innerText = '✅ VÀO HÀNG ĐỢI';
-                btnElement.style.background = '#22c55e';
-            }
+            // Cập nhật nhãn "Downloaded" ngay lập tức trên UI (Optimistic Update)
+            updateUIDownloaded(url, btnElement);
         })
         .catch(err => {
-            console.error("Lỗi:", err);
-            if (btnElement) {
-                btnElement.innerText = '❌ LỖI GỬI SERVER';
-                btnElement.style.background = '#ef4444';
-                btnElement.disabled = false;
-            }
+            console.error("[YT-EXT] Lỗi gửi yêu cầu download:", err);
         });
+}
+
+/**
+ * Cập nhật giao diện sang trạng thái "Downloaded" ngay lập tức
+ */
+function updateUIDownloaded(url, btnElement) {
+    let overlay = null;
+    if (btnElement) {
+        overlay = btnElement.closest('.yt-ext-overlay');
+    } else {
+        // Tìm overlay dựa trên URL (dùng cho Manual Selection)
+        const container = document.querySelector(`[data-yt-ext-url="${url}"]`);
+        if (container) {
+            overlay = container.querySelector('.yt-ext-overlay');
+        }
+    }
+
+    if (overlay) {
+        // Chuyển trạng thái overlay sang unselected (nhường slot)
+        overlay.classList.remove('is-valid', 'item-selected');
+        overlay.classList.add('is-invalid', 'item-unselected', 'is-downloaded-item');
+
+        // Cập nhật nhãn Hashtag
+        let hashtag = overlay.querySelector('.yt-ext-hashtag');
+        if (!hashtag) {
+            hashtag = document.createElement('div');
+            hashtag.className = 'yt-ext-hashtag';
+            hashtag.style.color = 'white';
+            hashtag.style.zIndex = '100';
+            overlay.appendChild(hashtag);
+        }
+        
+        hashtag.innerText = 'Downloaded';
+        hashtag.style.backgroundColor = 'rgba(107, 114, 128, 0.9)';
+        hashtag.classList.add('is-downloaded');
+
+        // Bỏ chọn checkbox
+        const cb = overlay.querySelector('.yt-ext-checkbox');
+        if (cb) cb.checked = false;
+        
+        // Xóa khỏi danh sách chờ bulk download
+        bulkDownloadItems.delete(url);
+    }
 }
 
 // =========================================================
