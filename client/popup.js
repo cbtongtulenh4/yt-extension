@@ -2,16 +2,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. Khôi phục cấu hình
     chrome.storage.local.get(['ytConfig'], (data) => {
         if (data.ytConfig) {
+            document.getElementById('config-check-quality').checked = data.ytConfig.checkQuality !== undefined ? data.ytConfig.checkQuality : true;
             document.getElementById('config-quality').value = data.ytConfig.quality || '1080';
+            document.getElementById('config-check-len').checked = data.ytConfig.checkLen !== undefined ? data.ytConfig.checkLen : true;
             document.getElementById('config-min-len').value = data.ytConfig.minLen !== undefined ? data.ytConfig.minLen : 0;
             document.getElementById('config-max-len').value = data.ytConfig.maxLen !== undefined ? data.ytConfig.maxLen : 60;
             document.getElementById('config-check-views').checked = data.ytConfig.checkViews !== undefined ? data.ytConfig.checkViews : true;
             document.getElementById('config-min-view').value = data.ytConfig.minViewFormat || '100K';
             document.getElementById('config-check-time').checked = data.ytConfig.checkTime !== undefined ? data.ytConfig.checkTime : true;
             document.getElementById('config-max-days').value = data.ytConfig.maxDays !== undefined ? data.ytConfig.maxDays : 30;
+            document.getElementById('config-check-auto').checked = data.ytConfig.checkAuto !== undefined ? data.ytConfig.checkAuto : false;
             document.getElementById('config-max-count').value = data.ytConfig.maxCount !== undefined ? data.ytConfig.maxCount : 0;
             document.getElementById('config-only-valid').checked = data.ytConfig.onlyValid !== undefined ? data.ytConfig.onlyValid : false;
-            updateStatusLabel(data.ytConfig.maxCount || 0);
+            updateStatusLabel(data.ytConfig.checkAuto ? (data.ytConfig.maxCount || 0) : 0);
         } else {
             // Save defaults
             saveAndSyncConfig();
@@ -69,24 +72,27 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function saveAndSyncConfig() {
-    // Thu thập giá trị hiện tại
+    const isAutoChecked = document.getElementById('config-check-auto').checked;
     const maxVal = parseInt(document.getElementById('config-max-count').value);
     const safeMaxVal = isNaN(maxVal) ? 0 : maxVal;
 
     const newConfig = {
+        checkQuality: document.getElementById('config-check-quality').checked,
         quality: document.getElementById('config-quality').value,
+        checkLen: document.getElementById('config-check-len').checked,
         minLen: parseInt(document.getElementById('config-min-len').value) || 0,
         maxLen: parseInt(document.getElementById('config-max-len').value) || 9999,
         checkViews: document.getElementById('config-check-views').checked,
         minViewFormat: document.getElementById('config-min-view').value,
         checkTime: document.getElementById('config-check-time').checked,
         maxDays: parseInt(document.getElementById('config-max-days').value) || 30,
+        checkAuto: isAutoChecked,
         maxCount: safeMaxVal,
         onlyValid: document.getElementById('config-only-valid').checked
     };
 
-    // Cập nhật nhãn trạng thái cục bộ ngay lập tức
-    updateStatusLabel(safeMaxVal);
+    // Cập nhật nhãn trạng thái cục bộ dựa trên checkbox Auto
+    updateStatusLabel(isAutoChecked ? safeMaxVal : 0);
 
     chrome.storage.local.set({ ytConfig: newConfig }, () => {
         // Sync xuống Tab đang mở

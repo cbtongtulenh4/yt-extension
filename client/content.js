@@ -96,13 +96,16 @@ setInterval(() => {
 
 function parseConfig(rawConfig) {
     return {
+        checkQuality: rawConfig.checkQuality !== undefined ? rawConfig.checkQuality : true,
         quality: rawConfig.quality,
+        checkLen: rawConfig.checkLen !== undefined ? rawConfig.checkLen : true,
         minLen: rawConfig.minLen,
         maxLen: rawConfig.maxLen,
         checkViews: rawConfig.checkViews,
         minView: parseViewsStr(rawConfig.minViewFormat),
         checkTime: rawConfig.checkTime,
         maxDays: rawConfig.maxDays,
+        checkAuto: rawConfig.checkAuto !== undefined ? rawConfig.checkAuto : false,
         maxCount: rawConfig.maxCount || 0,
         onlyValid: rawConfig.onlyValid || false
     };
@@ -294,7 +297,7 @@ async function processVideos() {
                 let rejectReasons = [];
 
                 let durationMin = durationSec / 60;
-                if (durationMin < currentConfig.minLen || durationMin > currentConfig.maxLen) {
+                if (currentConfig.checkLen && (durationMin < currentConfig.minLen || durationMin > currentConfig.maxLen)) {
                     isValid = false;
                     rejectReasons.push(`Dài ${Math.round(durationMin)}m`);
                 }
@@ -338,8 +341,10 @@ async function processVideos() {
                     rejectReasons.push("Downloaded");
                 }
 
-                // Kiểm tra ĐỊNH MỨC
-                if (isValid && currentConfig.maxCount > 0 && validFoundCount >= currentConfig.maxCount) {
+                // Kiểm tra ĐỊNH MỨC QUÉT TỰ ĐỘNG
+                if (!currentConfig.checkAuto) {
+                    isValid = false;
+                } else if (isValid && currentConfig.maxCount > 0 && validFoundCount >= currentConfig.maxCount) {
                     isValid = false;
                     rejectReasons.push(`Đã đạt Max (${currentConfig.maxCount})`);
                 }

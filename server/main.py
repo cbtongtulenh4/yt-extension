@@ -102,6 +102,17 @@ def save_to_history(video_id):
 # Nạp lịch sử ngay khi script chạy
 load_history()
 
+# --- QUẢN LÝ LINK LỖI ---
+ERROR_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "failed_links.txt")
+
+def save_to_errors(url):
+    if not url: return
+    try:
+        with open(ERROR_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{url}\n")
+    except Exception as e:
+        print(f"[!] Error saving to error file: {e}")
+
 app = FastAPI(title="YouTube Downloader Server")
 
 # Allow requests from the extension on any origin (for youtube.com)
@@ -268,6 +279,10 @@ def process_download(url: str, quality: str = "1080", output_dir: str = "Downloa
     except Exception as e:
         print(f"[ERROR] Failed {url}: {str(e)}")
         download_status[url] = {"status": "error", "message": str(e)}
+        
+        # Ghi nhận link lỗi vào file để xem lại sau
+        save_to_errors(url)
+        
         # Xóa khỏi active_download_ids để UI có thể bỏ nhãn Downloaded (Cơ chế Rollback)
         if vid in active_download_ids:
             active_download_ids.discard(vid)
