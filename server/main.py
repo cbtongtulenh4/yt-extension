@@ -72,6 +72,36 @@ class ProxyManager:
 
 proxy_manager = ProxyManager()
 
+# --- QUẢN LÝ LỊCH SỬ TẢI ---
+HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history.txt")
+downloaded_ids = set()
+
+def load_history():
+    global downloaded_ids
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                downloaded_ids = set(line.strip() for line in f if line.strip())
+            print(f"[*] Loaded {len(downloaded_ids)} IDs from history.")
+        except Exception as e:
+            print(f"[!] Error loading history: {e}")
+    else:
+        print("[*] History file not found, starting fresh.")
+
+def save_to_history(video_id):
+    if not video_id: return
+    global downloaded_ids
+    if video_id not in downloaded_ids:
+        downloaded_ids.add(video_id)
+        try:
+            with open(HISTORY_FILE, "a", encoding="utf-8") as f:
+                f.write(f"{video_id}\n")
+        except Exception as e:
+            print(f"[!] Error saving to history file: {e}")
+
+# Nạp lịch sử ngay khi script chạy
+load_history()
+
 app = FastAPI(title="YouTube Downloader Server")
 
 # Allow requests from the extension on any origin (for youtube.com)
@@ -88,6 +118,8 @@ download_queue = queue.Queue()
 
 # Dict lưu trạng thái tải trong memory
 download_status = {}
+# Set lưu các ID đang trong hàng đợi để tránh bị add trùng trong 1 phiên làm việc
+active_download_ids = set()
 
 class UrlRequest(BaseModel):
     url: str
@@ -191,30 +223,11 @@ def process_download(url: str, quality: str = "1080", output_dir: str = "Downloa
         search_opts['ffmpeg_location'] = ffmpeg_bin_dir
     
     try:
-        # 1. Kiểm tra lại metadata và format (như yt_url.py)
-        with yt_dlp.YoutubeDL(search_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            formats = info.get('formats', [])
-            available_heights = {f.get('height') for f in formats if f.get('height')}
-            target_height = int(quality.replace('p', '')) if isinstance(quality, str) else quality
-            best_quality = max(available_heights) if available_heights else 0
-            
-            if best_quality < target_height:
-                msg = f"Max quality {best_quality}p < requested {quality}p"
-                print(f"[SKIP] {url}: {msg}")
-                download_status[url] = {"status": "error", "message": msg}
-                return False
-            
-            if target_height not in available_heights:
-                msg = f"Exact quality {quality}p not found"
-                print(f"[SKIP] {url}: {msg}")
-                download_status[url] = {"status": "error", "message": msg}
-                return False
-                
+        # Chuyển đổi quality (ví dụ "1080" hoặc "1080p") thành số nguyên
+        target_height = int(str(quality).replace('p', '')) if quality else 1080
     except Exception as e:
-        print(f"[ERROR] Metadat Extraction Failed for {url}: {str(e)}")
-        download_status[url] = {"status": "error", "message": str(e)}
-        return False
+        print(f"[!] Invalid quality format: {quality}, fallback to 1080")
+        target_height = 1080
 
     ydl_opts = {
         'format': f'bv*[height={target_height}]+ba[ext=m4a]/best[ext=mp4]/best',
@@ -235,6 +248,16 @@ def process_download(url: str, quality: str = "1080", output_dir: str = "Downloa
         
         download_status[url] = {"status": "completed"}
         print(f"[SUCCESS] {url} done!")
+        
+        # Ghi vào lịch sử vĩnh viễn khi tải thành công
+        try:
+            # Lấy video_id từ URL hoặc từ chính url nếu nó là ID
+            import re
+            vid_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", url)
+            vid = vid_match.group(1) if vid_match else url
+            save_to_history(vid)
+        except: pass
+            
         return True
     except Exception as e:
         print(f"[ERROR] Failed {url}: {str(e)}")
@@ -278,12 +301,33 @@ def add_to_queue(req: DownloadRequest):
     """
     API thêm URL vào hàng đợi (queue), bộ lắng nghe sẽ tự động pick up và tải.
     """
+    # Trích xuất ID
+    import re
+    vid_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", req.url)
+    vid = vid_match.group(1) if vid_match else req.url
+    
+    active_download_ids.add(vid)
     download_queue.put(req)
     download_status[req.url] = {"status": "added_to_queue"}
     return {
         "message": "Link added to processing queue",
         "url": req.url,
         "queue_size": download_queue.qsize()
+    }
+
+@app.get("/api/check_history")
+def check_video_history(video_id: str):
+    """
+    API kiểm tra xem ID đã được tải chưa.
+    Check cả trong lịch sử (file) và trong hàng đợi hiện tại.
+    """
+    is_downloaded = video_id in downloaded_ids
+    is_active = video_id in active_download_ids
+    
+    return {
+        "video_id": video_id,
+        "downloaded": is_downloaded or is_active,
+        "type": "persistent" if is_downloaded else ("active" if is_active else "none")
     }
 
 @app.get("/api/status")

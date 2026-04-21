@@ -244,261 +244,252 @@ function updateQualityDropdown(select, qualities) {
     }
 }
 
-// Hàm duyệt tìm video
-function processVideos() {
-    // Đã bỏ giới hạn maxCount để quét không giới hạn
+let isScanning = false;
 
-    const videoSelectors = [
-        'ytd-rich-item-renderer',
-        // 'ytd-video-renderer',
-        // 'ytd-grid-video-renderer',
-        // 'ytd-compact-video-renderer'
-    ];
+// Hàm duyệt tìm video (Đã chuyển sang Async để thực hiện check tuần tự)
+async function processVideos() {
+    if (isScanning) return;
+    isScanning = true;
 
-    const items = document.querySelectorAll(videoSelectors.join(', '));
+    try {
+        const videoSelectors = [
+            'ytd-rich-item-renderer',
+            'ytd-video-renderer',
+            'ytd-grid-video-renderer',
+            'ytd-compact-video-renderer'
+        ];
 
-    items.forEach(item => {
-        // Chặn sớm trong loop
-        // Đã bỏ chặn MaxCount bên trong loop
+        const items = document.querySelectorAll(videoSelectors.join(', '));
 
-        try {
-            let titleEl = item.querySelector('a#video-title, a#video-title-link');
-            if (!titleEl) return;
-            let url = titleEl.href;
-            if (!url || url.includes('/shorts/')) return;
+        for (const item of items) {
+            try {
+                let titleEl = item.querySelector('a#video-title, a#video-title-link');
+                if (!titleEl) continue;
+                let url = titleEl.href;
+                if (!url || url.includes('/shorts/')) continue;
 
-            // KIỂM TRA TÁI SỬ DỤNG RENDERER (Youtube SPA)
-            // Nếu Element này đã được quét cho video khác rồi, cần reset để quét lại URL mới
-            if (item.dataset.ytExtProcessed === "true" && item.dataset.ytExtUrl === url) {
-                return;
-            }
-
-            // Dọn dẹp Overlay cũ (nếu có) carried over từ tab trước
-            let oldOverlay = item.querySelector('.yt-ext-overlay');
-            if (oldOverlay) oldOverlay.remove();
-
-            // QUAN TRỌNG: Dọn dẹp dấu hiệu chọn thủ công nếu Video đã thay đổi trên Element này
-            let thumbnail = item.querySelector('ytd-thumbnail');
-            if (thumbnail && thumbnail.classList.contains('yt-ext-manual-selected')) {
-                thumbnail.classList.remove('yt-ext-manual-selected');
-                manuallySelectedItems.delete(thumbnail);
-
-                // Cập nhật lại Toast nếu đang ở Manual Mode
-                if (isManualSelectionMode) {
-                    showToast(`Giỏ hàng: ${manuallySelectedItems.size} video thủ công.\n(Nhấn ENTER để Tải)`, 0);
-                }
-            }
-
-            let thumbnailOverlayTime = item.querySelector('ytd-thumbnail-overlay-time-status-renderer #text');
-            let durationStr = thumbnailOverlayTime ? thumbnailOverlayTime.textContent.trim() : "0:00";
-            let durationSec = parseDurationStr(durationStr);
-
-            let metadataLines = item.querySelectorAll('#metadata-line span.inline-metadata-item');
-            let viewsStr = "", timeAgoStr = "";
-            if (metadataLines.length >= 2) {
-                viewsStr = metadataLines[0].textContent;
-                timeAgoStr = metadataLines[1].textContent;
-            } else if (metadataLines.length === 1) {
-                viewsStr = metadataLines[0].textContent;
-            }
-
-            let views = parseViewsStr(viewsStr);
-            let daysAgo = parseTimeAgoStr(timeAgoStr);
-            let isValid = true;
-            let rejectReasons = [];
-
-            let durationMin = durationSec / 60;
-            if (durationMin < currentConfig.minLen || durationMin > currentConfig.maxLen) {
-                isValid = false;
-                rejectReasons.push(`Dài ${Math.round(durationMin)}m`);
-            }
-
-            if (currentConfig.checkViews && views < currentConfig.minView) {
-                isValid = false;
-                rejectReasons.push(`Thiếu View (${viewsStr.trim()})`);
-            }
-
-            if (currentConfig.checkTime && daysAgo > currentConfig.maxDays) {
-                isValid = false;
-                rejectReasons.push(`Quá Cũ (${daysAgo} ngày)`);
-            }
-
-            // LƯU LẠI: Video này có đạt các tiêu chuẩn cứng (View/Time/Độ dài) không?
-            const meetsRequirements = isValid;
-
-            // KIỂM TRA ĐỊNH MỨC: Nếu đã đủ số lượng, thì video này dù 'Ngon' cũng hạ cấp xuống thành video thường (Không auto fetch)
-            if (isValid && currentConfig.maxCount > 0 && validFoundCount >= currentConfig.maxCount) {
-                isValid = false;
-                rejectReasons.push(`Đã đạt Max (${currentConfig.maxCount})`);
-            }
-
-            // --- TẠO OVERLAY CHO VIDEO ---
-            if (thumbnail) {
-                // SỬA ĐỔI: Chế độ lọc gọn chỉ ẩn những video thực sự SAI THÔNG SỐ (mới ẩn)
-                // Còn video ngon mà quá Max Count thì vẫn PHẢI HIỆN để user chọn thủ công.
-                if (currentConfig.onlyValid && !meetsRequirements) {
-                    item.dataset.ytExtProcessed = "true";
-                    item.dataset.ytExtUrl = url;
-                    return;
+                // KIỂM TRA TÁI SỬ DỤNG RENDERER
+                if (item.dataset.ytExtProcessed === "true" && item.dataset.ytExtUrl === url) {
+                    continue;
                 }
 
-                // Thêm class để hỗ trợ hashtag nhô lên (overflow: visible)
-                thumbnail.classList.add('yt-ext-thumbnail-container');
+                // --- BƯỚC 1: LỌC SETTING (VIEW, TIME, LEN) ---
+                let thumbnailOverlayTime = item.querySelector('ytd-thumbnail-overlay-time-status-renderer #text');
+                let durationStr = thumbnailOverlayTime ? thumbnailOverlayTime.textContent.trim() : "0:00";
+                let durationSec = parseDurationStr(durationStr);
 
-                const overlay = document.createElement('div');
-                // Khởi tạo Class ban đầu dựa trên Validity và Selection State
-                overlay.className = 'yt-ext-overlay ' + (isValid ? 'is-valid item-selected' : 'is-invalid item-unselected');
+                let metadataLines = item.querySelectorAll('#metadata-line span.inline-metadata-item');
+                let viewsStr = "", timeAgoStr = "";
+                if (metadataLines.length >= 2) {
+                    viewsStr = metadataLines[0].textContent;
+                    timeAgoStr = metadataLines[1].textContent;
+                } else if (metadataLines.length === 1) {
+                    viewsStr = metadataLines[0].textContent;
+                }
 
-                // --- HASHTAG NHÔ LÊN (PROTRUSION) ---
-                const hashtag = document.createElement('div');
-                hashtag.className = 'yt-ext-hashtag';
-                hashtag.innerText = '#READY';
-                overlay.appendChild(hashtag);
+                let views = parseViewsStr(viewsStr);
+                let daysAgo = parseTimeAgoStr(timeAgoStr);
+                
+                let isValid = true;
+                let rejectReasons = [];
 
-                // --- CỘT TRÁI (LEFT AREA) ---
-                const leftArea = document.createElement('div');
-                leftArea.className = 'yt-ext-left-area';
+                let durationMin = durationSec / 60;
+                if (durationMin < currentConfig.minLen || durationMin > currentConfig.maxLen) {
+                    isValid = false;
+                    rejectReasons.push(`Dài ${Math.round(durationMin)}m`);
+                }
+                if (currentConfig.checkViews && views < currentConfig.minView) {
+                    isValid = false;
+                    rejectReasons.push(`Thiếu View (${viewsStr.trim()})`);
+                }
+                if (currentConfig.checkTime && daysAgo > currentConfig.maxDays) {
+                    isValid = false;
+                    rejectReasons.push(`Quá Cũ (${daysAgo} ngày)`);
+                }
 
-                // Dòng 1: Checkbox + Quality
-                const topLeft = document.createElement('div');
-                topLeft.className = 'yt-ext-top-left';
+                let meetsRequirements = isValid; 
 
-                const mainCheckbox = document.createElement('input');
-                mainCheckbox.type = 'checkbox';
-                mainCheckbox.className = 'yt-ext-checkbox';
-                mainCheckbox.checked = isValid;
+                // --- BƯỚC 2: KIỂM TRA HISTORY (SEQUENTIAL WAIT) ---
+                let isInHistory = false;
+                const videoId = url.split('v=')[1]?.split('&')[0] || url.split('/').pop();
+                try {
+                    const hRes = await fetch(`http://127.0.0.1:8000/api/check_history?video_id=${videoId}`);
+                    const hData = await hRes.json();
+                    isInHistory = hData.downloaded;
+                } catch (e) {
+                    console.warn("[YT-EXT] Check history fetch failed:", e);
+                }
 
-                const qualitySelect = document.createElement('select');
-                qualitySelect.className = 'yt-ext-quality-select';
+                // Logic "Nhường Slot": Nếu đã tải rồi thì không còn Valid để auto-fetch nữa
+                if (meetsRequirements && isInHistory) {
+                    isValid = false;
+                    // meetsRequirements vẫn giữ nguyên là true để video không bị ẩn bởi chế độ onlyValid
+                    rejectReasons.push("Downloaded");
+                }
 
-                if (isValid) {
-                    // Kịch bản 1: Tự động - Video hợp lệ hiện Loading...
+                // Kiểm tra ĐỊNH MỨC
+                if (isValid && currentConfig.maxCount > 0 && validFoundCount >= currentConfig.maxCount) {
+                    isValid = false;
+                    rejectReasons.push(`Đã đạt Max (${currentConfig.maxCount})`);
+                }
+
+                // --- BƯỚC 3: DỰNG GIAO DIỆN ---
+                let thumbnail = item.querySelector('ytd-thumbnail');
+                if (thumbnail) {
+                    // Cleanup
+                    let oldOverlay = item.querySelector('.yt-ext-overlay');
+                    if (oldOverlay) oldOverlay.remove();
+                    if (thumbnail.classList.contains('yt-ext-manual-selected')) {
+                        thumbnail.classList.remove('yt-ext-manual-selected');
+                        manuallySelectedItems.delete(thumbnail);
+                    }
+
+                    // Mode OnlyValid
+                    if (currentConfig.onlyValid && !meetsRequirements) {
+                        item.dataset.ytExtProcessed = "true";
+                        item.dataset.ytExtUrl = url;
+                        continue;
+                    }
+
+                    thumbnail.classList.add('yt-ext-thumbnail-container');
+                    const overlay = document.createElement('div');
+                    overlay.className = 'yt-ext-overlay ' + (isValid ? 'is-valid item-selected' : 'is-invalid item-unselected');
+
+                    // NHÃN TRẠNG THÁI
+                    const hashtag = document.createElement('div');
+                    hashtag.className = 'yt-ext-hashtag';
+                    if (isInHistory) {
+                        hashtag.innerText = 'Downloaded';
+                        hashtag.style.backgroundColor = 'rgba(107, 114, 128, 0.9)'; 
+                    } else {
+                        hashtag.innerText = '#READY';
+                        hashtag.style.backgroundColor = 'rgba(34, 197, 94, 0.9)';
+                    }
+                    if (isValid || isInHistory) overlay.appendChild(hashtag);
+
+                    // THÔNG TIN
+                    const leftArea = document.createElement('div');
+                    leftArea.className = 'yt-ext-left-area';
+                    const topLeft = document.createElement('div');
+                    topLeft.className = 'yt-ext-top-left';
+
+                    const mainCheckbox = document.createElement('input');
+                    mainCheckbox.type = 'checkbox';
+                    mainCheckbox.className = 'yt-ext-checkbox';
+                    mainCheckbox.checked = isValid;
+
+                    const qualitySelect = document.createElement('select');
+                    qualitySelect.className = 'yt-ext-quality-select';
                     const opt = document.createElement('option');
                     opt.value = "";
-                    opt.textContent = "⏳...";
+                    opt.textContent = isValid ? "⏳..." : "Quality";
                     qualitySelect.appendChild(opt);
-                } else {
-                    // Kịch bản 2: Thủ công - Video khác hiện nút "Chọn chất lượng"
-                    const opt = document.createElement('option');
-                    opt.value = "";
-                    opt.textContent = "Quality";
-                    qualitySelect.appendChild(opt);
-                }
 
-                topLeft.appendChild(mainCheckbox);
-                topLeft.appendChild(qualitySelect);
-                leftArea.appendChild(topLeft);
+                    topLeft.appendChild(mainCheckbox);
+                    topLeft.appendChild(qualitySelect);
+                    leftArea.appendChild(topLeft);
 
-                // Các dòng thông tin tiếp theo
-                const createInfoLine = (icon, text) => {
-                    const line = document.createElement('div');
-                    line.className = 'yt-ext-info-item';
-                    line.innerHTML = `<span>${icon}</span> <span>${text}</span>`;
-                    return line;
-                };
+                    const createInfoLine = (icon, text) => {
+                        const line = document.createElement('div');
+                        line.className = 'yt-ext-info-item';
+                        line.innerHTML = `<span>${icon}</span> <span>${text}</span>`;
+                        return line;
+                    };
+                    leftArea.appendChild(createInfoLine('👁️', viewsStr.trim()));
+                    leftArea.appendChild(createInfoLine('🕒', durationStr));
+                    leftArea.appendChild(createInfoLine('📅', timeAgoStr.trim()));
+                    overlay.appendChild(leftArea);
 
-                leftArea.appendChild(createInfoLine('👁️', viewsStr.trim()));
-                leftArea.appendChild(createInfoLine('🕒', durationStr));
-                leftArea.appendChild(createInfoLine('📅', timeAgoStr.trim()));
+                    // Nút download nhanh
+                    const rightTop = document.createElement('div');
+                    rightTop.className = 'yt-ext-right-top';
+                    const dlBtn = document.createElement('button');
+                    dlBtn.className = 'yt-ext-dl-btn-small';
+                    dlBtn.innerHTML = '⬇️';
+                    rightTop.appendChild(dlBtn);
+                    overlay.appendChild(rightTop);
 
-                overlay.appendChild(leftArea);
+                    // Opacity
+                    const opacityCtrl = document.createElement('div');
+                    opacityCtrl.className = 'yt-ext-opacity-control';
+                    opacityCtrl.innerHTML = `<span>Bỏ Opacity</span>`;
+                    const opacityToggle = document.createElement('input');
+                    opacityToggle.type = 'checkbox';
+                    opacityToggle.className = 'yt-ext-opacity-toggle';
+                    opacityCtrl.appendChild(opacityToggle);
+                    overlay.appendChild(opacityCtrl);
 
-                // --- GÓC PHẢI TRÊN (RIGHT TOP) ---
-                const rightTop = document.createElement('div');
-                rightTop.className = 'yt-ext-right-top';
+                    thumbnail.appendChild(overlay);
 
-                const dlBtn = document.createElement('button');
-                dlBtn.className = 'yt-ext-dl-btn-small';
-                dlBtn.innerHTML = '⬇️';
-                dlBtn.title = "Tải video này";
+                    // Events
+                    qualitySelect.addEventListener('mousedown', (e) => {
+                        if (qualitySelect.dataset.fetched !== "true" && qualitySelect.dataset.loading !== "true") {
+                            e.preventDefault();
+                            fetchVideoQualitiesFromClient(url, qualitySelect);
+                        }
+                    });
 
-                rightTop.appendChild(dlBtn);
-                overlay.appendChild(rightTop);
-
-                // --- GÓC PHẢI DƯỚI (OPACITY CONTROL) ---
-                const opacityCtrl = document.createElement('div');
-                opacityCtrl.className = 'yt-ext-opacity-control';
-                opacityCtrl.innerHTML = `<span>Bỏ Opacity</span>`;
-
-                const opacityToggle = document.createElement('input');
-                opacityToggle.type = 'checkbox';
-                opacityToggle.className = 'yt-ext-opacity-toggle';
-
-                opacityCtrl.appendChild(opacityToggle);
-                overlay.appendChild(opacityCtrl);
-                thumbnail.appendChild(overlay);
-
-                // --- LOGIC TƯƠNG TÁC ---
-
-                // Click vào select để fetch thủ công nếu chưa có dữ liệu
-                qualitySelect.addEventListener('mousedown', (e) => {
-                    if (qualitySelect.dataset.fetched !== "true" && qualitySelect.dataset.loading !== "true") {
-                        // Nếu chưa lấy quality, chặn mở menu và đi fetch (Kịch bản thủ công)
-                        e.preventDefault();
+                    // --- BƯỚC 4: LOAD QUALITY (NẾU READY) ---
+                    if (isValid) {
                         fetchVideoQualitiesFromClient(url, qualitySelect);
                     }
-                });
 
-                // --- GỌI SERVER ĐỂ LẤY CHẤT LƯỢNG CHÍNH XÁC ---
-                if (isValid) {
-                    fetchVideoQualitiesFromClient(url, qualitySelect);
-                }
+                    const updateSelectionStatus = (selected) => {
+                        if (selected) {
+                            overlay.classList.add('item-selected');
+                            overlay.classList.remove('item-unselected');
+                        } else {
+                            overlay.classList.remove('item-selected');
+                            overlay.classList.add('item-unselected');
+                        }
+                    };
 
-                // Hàm Helper để đồng bộ trạng thái màu của Overlay
-                const updateSelectionStatus = (selected) => {
-                    if (selected) {
-                        overlay.classList.add('item-selected');
-                        overlay.classList.remove('item-unselected');
-                    } else {
-                        overlay.classList.remove('item-selected');
-                        overlay.classList.add('item-unselected');
-                    }
-                };
+                    dlBtn.addEventListener('click', (e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        sendDownloadRequest(url, qualitySelect.value, dlBtn);
+                        if (mainCheckbox.checked) {
+                            mainCheckbox.checked = false;
+                            bulkDownloadItems.delete(url);
+                            updateSelectionStatus(false);
+                        }
+                    });
 
-                // Nút download đơn lẻ (Tải nhanh)
-                dlBtn.addEventListener('click', (e) => {
-                    e.preventDefault(); e.stopPropagation();
-                    const chosenQuality = qualitySelect.value;
-                    sendDownloadRequest(url, chosenQuality, dlBtn);
-
-                    if (mainCheckbox.checked) {
-                        mainCheckbox.checked = false;
-                        bulkDownloadItems.delete(url);
-                        updateSelectionStatus(false);
-                    }
-                });
-
-                // Checkbox chọn hàng loạt
-                // Nếu video Valid -> Cho sẵn vào Map Bulk Download (kèm theo nút và drowdown)
-                if (isValid) {
-                    bulkDownloadItems.set(url, { btn: dlBtn, select: qualitySelect });
-                    validFoundCount++;
-                }
-
-                mainCheckbox.addEventListener('change', () => {
-                    const isChecked = mainCheckbox.checked;
-                    updateSelectionStatus(isChecked);
-                    if (isChecked) {
+                    if (isValid) {
                         bulkDownloadItems.set(url, { btn: dlBtn, select: qualitySelect });
-                    } else {
-                        bulkDownloadItems.delete(url);
+                        validFoundCount++;
                     }
-                });
 
-                // Toggle mờ thông tin (Bỏ Opacity)
-                opacityToggle.addEventListener('change', () => {
-                    if (opacityToggle.checked) {
-                        overlay.classList.add('fade-info');
-                    } else {
-                        overlay.classList.remove('fade-info');
-                    }
-                });
+                    mainCheckbox.addEventListener('change', () => {
+                        const isChecked = mainCheckbox.checked;
+                        updateSelectionStatus(isChecked);
+                        if (isChecked) {
+                            bulkDownloadItems.set(url, { btn: dlBtn, select: qualitySelect });
+                        } else {
+                            bulkDownloadItems.delete(url);
+                        }
+                    });
+
+                    // Toggle mờ thông tin (Bỏ Opacity)
+                    opacityToggle.addEventListener('change', () => {
+                        if (opacityToggle.checked) {
+                            overlay.classList.add('fade-info');
+                        } else {
+                            overlay.classList.remove('fade-info');
+                        }
+                    });
+                }
+                // Đánh dấu đã xử lý theo đúng URL này
+                item.dataset.ytExtProcessed = "true";
+                item.dataset.ytExtUrl = url;
+            } catch (innerErr) {
+                console.warn("[YT-EXT] Lỗi video đơn lẻ:", innerErr);
             }
-            // Đánh dấu đã xử lý theo đúng URL này
-            item.dataset.ytExtProcessed = "true";
-            item.dataset.ytExtUrl = url;
-        } catch (err) { }
-    });
+        }
+    } catch (err) {
+        console.error("[YT-EXT] Lỗi quét chính:", err);
+    } finally {
+        isScanning = false;
+    }
 }
 
 function sendDownloadRequest(url, quality, btnElement) {
