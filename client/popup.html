@@ -150,10 +150,17 @@
         <input type="number" id="config-max-days" value="30" style="width: 80px;">
     </div>
 
-    <!-- UPDATE 1: Giới hạn số lượng tự động max -->
     <div class="form-row">
         <label title="0 là TẮT tự tìm. Mở > 0 để bắt đầu Auto quét">Số lượng Auto Tìm (0 = Tắt):</label>
         <input type="number" id="config-max-count" value="0" style="width: 80px;" min="0">
+    </div>
+
+    <!-- UPDATE 2: Chế độ lọc gọn -->
+    <div class="form-row">
+        <label class="checkbox-label" title="Ẩn các overlay trên video không thỏa mãn bộ lọc">
+            <input type="checkbox" id="config-only-valid">
+            Chỉ hiện Valid video
+        </label>
     </div>
     
     <div class="status-container">

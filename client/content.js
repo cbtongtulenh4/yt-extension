@@ -103,7 +103,8 @@ function parseConfig(rawConfig) {
         minView: parseViewsStr(rawConfig.minViewFormat),
         checkTime: rawConfig.checkTime,
         maxDays: rawConfig.maxDays,
-        maxCount: rawConfig.maxCount || 0
+        maxCount: rawConfig.maxCount || 0,
+        onlyValid: rawConfig.onlyValid || false
     };
 }
 
@@ -322,17 +323,25 @@ function processVideos() {
                 rejectReasons.push(`Quá Cũ (${daysAgo} ngày)`);
             }
 
-            // MỚI: Nếu đã tìm đủ số lượng video Hợp lệ theo cấu hình, 
-            // thì những video tiếp theo (dù thỏa mãn) cũng sẽ bị coi là Không Hợp Lệ 
-            // để chỉ hiện nút Quality thay vì tự động fetch.
+            // LƯU LẠI: Video này có đạt các tiêu chuẩn cứng (View/Time/Độ dài) không?
+            const meetsRequirements = isValid;
+
+            // KIỂM TRA ĐỊNH MỨC: Nếu đã đủ số lượng, thì video này dù 'Ngon' cũng hạ cấp xuống thành video thường (Không auto fetch)
             if (isValid && currentConfig.maxCount > 0 && validFoundCount >= currentConfig.maxCount) {
                 isValid = false;
                 rejectReasons.push(`Đã đạt Max (${currentConfig.maxCount})`);
             }
 
-            // --- TẠO OVERLAY CHO TẤT CẢ CÁC VIDEO (Dù hợp lệ hay không) ---
-            // thumbnail đã được declare ở trên rồi, chỉ cần dùng lại
+            // --- TẠO OVERLAY CHO VIDEO ---
             if (thumbnail) {
+                // SỬA ĐỔI: Chế độ lọc gọn chỉ ẩn những video thực sự SAI THÔNG SỐ (mới ẩn)
+                // Còn video ngon mà quá Max Count thì vẫn PHẢI HIỆN để user chọn thủ công.
+                if (currentConfig.onlyValid && !meetsRequirements) {
+                    item.dataset.ytExtProcessed = "true";
+                    item.dataset.ytExtUrl = url;
+                    return;
+                }
+
                 // Thêm class để hỗ trợ hashtag nhô lên (overflow: visible)
                 thumbnail.classList.add('yt-ext-thumbnail-container');
 

@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('config-check-time').checked = data.ytConfig.checkTime !== undefined ? data.ytConfig.checkTime : true;
             document.getElementById('config-max-days').value = data.ytConfig.maxDays !== undefined ? data.ytConfig.maxDays : 30;
             document.getElementById('config-max-count').value = data.ytConfig.maxCount !== undefined ? data.ytConfig.maxCount : 0;
+            document.getElementById('config-only-valid').checked = data.ytConfig.onlyValid !== undefined ? data.ytConfig.onlyValid : false;
             updateStatusLabel(data.ytConfig.maxCount || 0);
         } else {
             // Save defaults
@@ -80,7 +81,8 @@ function saveAndSyncConfig() {
         minViewFormat: document.getElementById('config-min-view').value,
         checkTime: document.getElementById('config-check-time').checked,
         maxDays: parseInt(document.getElementById('config-max-days').value) || 30,
-        maxCount: safeMaxVal
+        maxCount: safeMaxVal,
+        onlyValid: document.getElementById('config-only-valid').checked
     };
     
     // Cập nhật nhãn trạng thái cục bộ ngay lập tức
