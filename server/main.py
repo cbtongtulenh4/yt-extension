@@ -70,7 +70,7 @@ class ProxyManager:
                 else:
                     self.current_index %= len(self.proxies)
 
-proxy_manager = ProxyManager()
+# proxy_manager = ProxyManager()
 
 # --- QUẢN LÝ LỊCH SỬ TẢI ---
 HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history.txt")
@@ -113,6 +113,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- Dữ liệu hàng đợi và trạng thái ---
 # Hàng đợi (queue) chứa các link cần tải
 download_queue = queue.Queue()
 
@@ -129,70 +130,70 @@ class DownloadRequest(BaseModel):
     quality: str = "1080"
     output_dir: str = "Downloads"
 
-@app.post("/api/qualities")
-def get_video_qualities(req: UrlRequest):
-    """
-    1. Cơ chế nhận link youtube trả về tất cả chất lượng có thể download.
-    Sử dụng proxy xoay vòng để tránh bị YouTube block.
-    """
-    ffmpeg_bin_dir = get_ffmpeg_path()
+# @app.post("/api/qualities")
+# def get_video_qualities(req: UrlRequest):
+#     """
+#     1. Cơ chế nhận link youtube trả về tất cả chất lượng có thể download.
+#     Sử dụng proxy xoay vòng để tránh bị YouTube block.
+#     """
+#     ffmpeg_bin_dir = get_ffmpeg_path()
     
-    # Số lần thử tối đa: nếu có proxy thì thử tối đa 10 proxy hoặc số proxy hiện có
-    num_proxies = len(proxy_manager.proxies)
-    max_retries = max(1, min(10, num_proxies)) if num_proxies > 0 else 1
+#     # Số lần thử tối đa: nếu có proxy thì thử tối đa 10 proxy hoặc số proxy hiện có
+#     num_proxies = len(proxy_manager.proxies)
+#     max_retries = max(1, min(10, num_proxies)) if num_proxies > 0 else 1
     
-    last_error = "No proxies available or all failed."
+#     last_error = "No proxies available or all failed."
     
-    for i in range(max_retries):
-        proxy = proxy_manager.get_proxy()
-        search_opts = {'quiet': True, 'no_warnings': True}
-        if ffmpeg_bin_dir:
-            search_opts['ffmpeg_location'] = ffmpeg_bin_dir
+#     for i in range(max_retries):
+#         proxy = proxy_manager.get_proxy()
+#         search_opts = {'quiet': True, 'no_warnings': True}
+#         if ffmpeg_bin_dir:
+#             search_opts['ffmpeg_location'] = ffmpeg_bin_dir
         
-        if proxy:
-            search_opts['proxy'] = proxy
-            print(f"[*] [Attempt {i+1}/{max_retries}] Fetching info using proxy: {proxy}")
-        else:
-            print(f"[*] [Attempt {i+1}/{max_retries}] Fetching info without proxy")
+#         if proxy:
+#             search_opts['proxy'] = proxy
+#             print(f"[*] [Attempt {i+1}/{max_retries}] Fetching info using proxy: {proxy}")
+#         else:
+#             print(f"[*] [Attempt {i+1}/{max_retries}] Fetching info without proxy")
 
-        try:
-            with yt_dlp.YoutubeDL(search_opts) as ydl:
-                # Lấy thông tin video mà không tải về
-                info = ydl.extract_info(req.url, download=False)
-                formats = info.get('formats', [])
+#         try:
+#             with yt_dlp.YoutubeDL(search_opts) as ydl:
+#                 # Lấy thông tin video mà không tải về
+#                 info = ydl.extract_info(req.url, download=False)
+#                 formats = info.get('formats', [])
                 
-                # Lọc ra các chiều cao độ phân giải (ví dụ: 1080, 720, ...)
-                available_heights = {f.get('height') for f in formats if f.get('vcodec') not in [None, 'none', 'None'] and f.get('height') is not None}
+#                 # Lọc ra các chiều cao độ phân giải (ví dụ: 1080, 720, ...)
+#                 available_heights = {f.get('height') for f in formats if f.get('vcodec') not in [None, 'none', 'None'] and f.get('height') is not None}
                 
-                # Sắp xếp giảm dần để dễ chọn
-                sorted_qualities = sorted(list(available_heights), reverse=True)
+#                 # Sắp xếp giảm dần để dễ chọn
+#                 sorted_qualities = sorted(list(available_heights), reverse=True)
                 
-                return {
-                    "url": req.url,
-                    "title": info.get('title'),
-                    "available_qualities": sorted_qualities,
-                    "proxy_count": num_proxies,
-                    "used_proxy": proxy is not None
-                }
-        except Exception as e:
-            err_msg = str(e).lower()
-            print(f"[!] Error on attempt {i+1}: {str(e)}")
-            last_error = str(e)
+#                 return {
+#                     "url": req.url,
+#                     "title": info.get('title'),
+#                     "available_qualities": sorted_qualities,
+#                     "proxy_count": num_proxies,
+#                     "used_proxy": proxy is not None
+#                 }
+#         except Exception as e:
+#             err_msg = str(e).lower()
+#             print(f"[!] Error on attempt {i+1}: {str(e)}")
+#             last_error = str(e)
             
-            # Kiểm tra nếu lỗi do proxy die hoặc bị block
-            if proxy:
-                dead_indicators = ["proxy", "connection refused", "timeout", "unable to download webpage", "403", "429"]
-                if any(ind in err_msg for ind in dead_indicators):
-                    proxy_manager.report_dead_proxy(proxy)
-                    # Nếu proxy bị loại, num_proxies giảm, ta vẫn tiếp tục vòng lặp
+#             # Kiểm tra nếu lỗi do proxy die hoặc bị block
+#             if proxy:
+#                 dead_indicators = ["proxy", "connection refused", "timeout", "unable to download webpage", "403", "429"]
+#                 if any(ind in err_msg for ind in dead_indicators):
+#                     proxy_manager.report_dead_proxy(proxy)
+#                     # Nếu proxy bị loại, num_proxies giảm, ta vẫn tiếp tục vòng lặp
                 
-            # Nếu là lỗi do link bị Private hoặc xóa thực sự, không cần thử proxy khác
-            # Còn lỗi 'not available' đôi khi là do vùng địa lý (geo-block) 
-            # nên vẫn nên thử proxy khác.
-            if "private" in err_msg or "deleted" in err_msg:
-                break
+#             # Nếu là lỗi do link bị Private hoặc xóa thực sự, không cần thử proxy khác
+#             # Còn lỗi 'not available' đôi khi là do vùng địa lý (geo-block) 
+#             # nên vẫn nên thử proxy khác.
+#             if "private" in err_msg or "deleted" in err_msg:
+#                 break
 
-    raise HTTPException(status_code=400, detail=f"Failed to fetch video information after {max_retries} attempts. Last error: {last_error}")
+#     raise HTTPException(status_code=400, detail=f"Failed to fetch video information after {max_retries} attempts. Last error: {last_error}")
 
 def process_download(url: str, quality: str = "1080", output_dir: str = "Downloads"):
     """

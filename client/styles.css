@@ -44,7 +44,8 @@
     white-space: nowrap;
 }
 
-.item-selected .yt-ext-hashtag {
+.item-selected .yt-ext-hashtag,
+.yt-ext-hashtag.is-downloaded {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }

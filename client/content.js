@@ -311,13 +311,24 @@ async function processVideos() {
 
                 // --- BƯỚC 2: KIỂM TRA HISTORY (SEQUENTIAL WAIT) ---
                 let isInHistory = false;
-                const videoId = url.split('v=')[1]?.split('&')[0] || url.split('/').pop();
-                try {
-                    const hRes = await fetch(`http://127.0.0.1:8000/api/check_history?video_id=${videoId}`);
-                    const hData = await hRes.json();
-                    isInHistory = hData.downloaded;
-                } catch (e) {
-                    console.warn("[YT-EXT] Check history fetch failed:", e);
+                
+                // Trích xuất Video ID chính xác hơn bằng Regex
+                let videoId = "";
+                const vidMatch = url.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/);
+                if (vidMatch) {
+                    videoId = vidMatch[1];
+                } else {
+                    videoId = url.split('v=')[1]?.split('&')[0] || url.split('/').pop();
+                }
+
+                if (videoId) {
+                    try {
+                        const hRes = await fetch(`http://127.0.0.1:8000/api/check_history?video_id=${videoId}`);
+                        const hData = await hRes.json();
+                        isInHistory = hData.downloaded;
+                    } catch (e) {
+                        console.warn("[YT-EXT] Check history fetch failed for ID:", videoId, e);
+                    }
                 }
 
                 // Logic "Nhường Slot": Nếu đã tải rồi thì không còn Valid để auto-fetch nữa
@@ -353,17 +364,30 @@ async function processVideos() {
 
                     thumbnail.classList.add('yt-ext-thumbnail-container');
                     const overlay = document.createElement('div');
-                    overlay.className = 'yt-ext-overlay ' + (isValid ? 'is-valid item-selected' : 'is-invalid item-unselected');
+                    let overlayClass = 'yt-ext-overlay ';
+                    if (isValid) {
+                        overlayClass += 'is-valid item-selected';
+                    } else {
+                        overlayClass += 'is-invalid item-unselected';
+                    }
+                    if (isInHistory) {
+                        overlayClass += ' is-downloaded-item';
+                    }
+                    overlay.className = overlayClass;
 
                     // NHÃN TRẠNG THÁI
                     const hashtag = document.createElement('div');
                     hashtag.className = 'yt-ext-hashtag';
+                    hashtag.style.color = 'white'; // Đảm bảo chữ luôn trắng
+                    hashtag.style.zIndex = '100';  // Đảm bảo nổi lên trên cùng
+
                     if (isInHistory) {
                         hashtag.innerText = 'Downloaded';
-                        hashtag.style.backgroundColor = 'rgba(107, 114, 128, 0.9)'; 
+                        hashtag.style.backgroundColor = 'rgba(107, 114, 128, 0.9)'; // Màu xám
+                        hashtag.classList.add('is-downloaded');
                     } else {
                         hashtag.innerText = '#READY';
-                        hashtag.style.backgroundColor = 'rgba(34, 197, 94, 0.9)';
+                        hashtag.style.backgroundColor = 'rgba(34, 197, 94, 0.9)'; // Màu xanh
                     }
                     if (isValid || isInHistory) overlay.appendChild(hashtag);
 
