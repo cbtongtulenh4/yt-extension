@@ -7,7 +7,7 @@
     "storage"
   ],
   "host_permissions": [
-    "*://*.youtube.com/*",
+    "<all_urls>",
     "http://127.0.0.1:8000/*",
     "http://localhost:8000/*"
   ],
@@ -17,7 +17,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.youtube.com/*"],
+      "matches": ["<all_urls>"],
       "css": ["styles.css"],
       "js": ["content.js"],
       "run_at": "document_idle"

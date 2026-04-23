@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('config-check-auto').checked = data.ytConfig.checkAuto !== undefined ? data.ytConfig.checkAuto : false;
             document.getElementById('config-max-count').value = data.ytConfig.maxCount !== undefined ? data.ytConfig.maxCount : 0;
             document.getElementById('config-only-valid').checked = data.ytConfig.onlyValid !== undefined ? data.ytConfig.onlyValid : false;
+            document.getElementById('config-direct-mode').checked = data.ytConfig.directMode !== undefined ? data.ytConfig.directMode : false;
             updateStatusLabel(data.ytConfig.checkAuto ? (data.ytConfig.maxCount || 0) : 0);
         } else {
             // Save defaults
@@ -41,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = "🚀 ĐANG GỬI LỆNH TẢI...";
 
         chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-            if (tabs.length > 0 && tabs[0].url.includes("youtube.com")) {
+            if (tabs.length > 0 && tabs[0].url && tabs[0].url.includes("youtube.com")) {
                 chrome.tabs.sendMessage(tabs[0].id, { action: "BULK_DOWNLOAD" }, (response) => {
                     if (response && response.count !== undefined) {
                         btn.textContent = `✅ ĐÃ GỬI ${response.count} VIDEO!`;
@@ -88,7 +89,8 @@ function saveAndSyncConfig() {
         maxDays: parseInt(document.getElementById('config-max-days').value) || 30,
         checkAuto: isAutoChecked,
         maxCount: safeMaxVal,
-        onlyValid: document.getElementById('config-only-valid').checked
+        onlyValid: document.getElementById('config-only-valid').checked,
+        directMode: document.getElementById('config-direct-mode').checked
     };
 
     // Cập nhật nhãn trạng thái cục bộ dựa trên checkbox Auto
@@ -97,7 +99,7 @@ function saveAndSyncConfig() {
     chrome.storage.local.set({ ytConfig: newConfig }, () => {
         // Sync xuống Tab đang mở
         chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-            if (tabs.length > 0 && tabs[0].url.includes("youtube.com")) {
+            if (tabs.length > 0 && tabs[0].url) {
                 chrome.tabs.sendMessage(tabs[0].id, {
                     action: "UPDATE_CONFIG",
                     config: newConfig

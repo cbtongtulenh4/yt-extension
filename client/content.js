@@ -29,15 +29,28 @@ function showToast(msg, duration = 3000) {
 chrome.storage.local.get(['ytConfig'], (data) => {
     if (data.ytConfig) {
         currentConfig = parseConfig(data.ytConfig);
+        if (currentConfig.directMode) {
+            initFloatingWidget();
+        }
     }
-    // Ghim lặp liên tục mỗi 2s để đắp giao diện
-    scanInterval = setInterval(processVideos, 2000);
+    // Ghim lặp liên tục mỗi 2s để đắp giao diện (Chỉ trên YouTube)
+    if (window.location.hostname.includes("youtube.com")) {
+        scanInterval = setInterval(processVideos, 2000);
+    }
 });
 
 // Lắng nghe lệnh từ Popup truyền đi (như Đổi Option hay Bấm Bulk Tải)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "UPDATE_CONFIG") {
         currentConfig = parseConfig(request.config);
+
+        // Cập nhật trạng thái widget nổi
+        if (currentConfig.directMode) {
+            initFloatingWidget();
+        } else {
+            removeFloatingWidget();
+        }
+
         fullReset(); // Thực hiện reset hoàn toàn khi đổi cấu hình
         showToast("🔄 Đã tự động cập nhật lại Lọc Video!", 2500);
         sendResponse({ status: "ok" });
@@ -74,21 +87,23 @@ function fullReset() {
 }
 
 // Bắt sự kiện chuyển hướng trang của YouTube (Single Page App)
-window.addEventListener('yt-navigate-finish', () => {
-    console.log("[YT-EXT] Phát hiện chuyển trang (Event), đang làm mới bộ lọc...");
-    fullReset();
-});
+if (window.location.hostname.includes("youtube.com")) {
+    window.addEventListener('yt-navigate-finish', () => {
+        console.log("[YT-EXT] Phát hiện chuyển trang (Event), đang làm mới bộ lọc...");
+        fullReset();
+    });
 
-// Cơ chế Polling URL phòng hờ sự kiện navigate-finish không kích hoạt ổn định
-let lastUrl = location.href;
-setInterval(() => {
-    if (location.href !== lastUrl) {
-        lastUrl = location.href;
-        console.log("[YT-EXT] Phát hiện đổi URL (Polling), đang chuẩn bị lọc lại...");
-        // Delay nhẹ 500ms để chờ Youtube Render sơ bộ nội dung mới
-        setTimeout(fullReset, 500);
-    }
-}, 1000);
+    // Cơ chế Polling URL phòng hờ sự kiện navigate-finish không kích hoạt ổn định
+    let lastUrl = location.href;
+    setInterval(() => {
+        if (location.href !== lastUrl) {
+            lastUrl = location.href;
+            console.log("[YT-EXT] Phát hiện đổi URL (Polling), đang chuẩn bị lọc lại...");
+            // Delay nhẹ 500ms để chờ Youtube Render sơ bộ nội dung mới
+            setTimeout(fullReset, 500);
+        }
+    }, 1000);
+}
 
 // ==========================================
 // CORE LOGIC HỖ TRỢ
@@ -107,7 +122,8 @@ function parseConfig(rawConfig) {
         maxDays: rawConfig.maxDays,
         checkAuto: rawConfig.checkAuto !== undefined ? rawConfig.checkAuto : false,
         maxCount: rawConfig.maxCount || 0,
-        onlyValid: rawConfig.onlyValid || false
+        onlyValid: rawConfig.onlyValid || false,
+        directMode: rawConfig.directMode || false
     };
 }
 
@@ -266,38 +282,48 @@ async function processVideos() {
 
         for (const item of items) {
             try {
-                let titleEl = item.querySelector('a#video-title, a#video-title-link');
+                let titleEl = item.querySelector('a#video-title, a#video-title-link, a.shortsLockupViewModelHostOutsideMetadataEndpoint');
                 if (!titleEl) continue;
                 let url = titleEl.href;
-                if (!url || url.includes('/shorts/')) continue;
+                if (!url) continue;
 
                 // KIỂM TRA TÁI SỬ DỤNG RENDERER
                 if (item.dataset.ytExtProcessed === "true" && item.dataset.ytExtUrl === url) {
                     continue;
                 }
 
+                let isShort = url.includes('/shorts/');
+
                 // --- BƯỚC 1: LỌC SETTING (VIEW, TIME, LEN) ---
                 let thumbnailOverlayTime = item.querySelector('ytd-thumbnail-overlay-time-status-renderer #text');
                 let durationStr = thumbnailOverlayTime ? thumbnailOverlayTime.textContent.trim() : "0:00";
                 let durationSec = parseDurationStr(durationStr);
 
-                let metadataLines = item.querySelectorAll('#metadata-line span.inline-metadata-item');
                 let viewsStr = "", timeAgoStr = "";
-                if (metadataLines.length >= 2) {
-                    viewsStr = metadataLines[0].textContent;
-                    timeAgoStr = metadataLines[1].textContent;
-                } else if (metadataLines.length === 1) {
-                    viewsStr = metadataLines[0].textContent;
+
+                if (isShort) {
+                    let shortViewEl = item.querySelector('.shortsLockupViewModelHostOutsideMetadataSubhead span');
+                    if (shortViewEl) {
+                        viewsStr = shortViewEl.textContent;
+                    }
+                } else {
+                    let metadataLines = item.querySelectorAll('#metadata-line span.inline-metadata-item');
+                    if (metadataLines.length >= 2) {
+                        viewsStr = metadataLines[0].textContent;
+                        timeAgoStr = metadataLines[1].textContent;
+                    } else if (metadataLines.length === 1) {
+                        viewsStr = metadataLines[0].textContent;
+                    }
                 }
 
                 let views = parseViewsStr(viewsStr);
                 let daysAgo = parseTimeAgoStr(timeAgoStr);
-                
+
                 let isValid = true;
                 let rejectReasons = [];
 
                 let durationMin = durationSec / 60;
-                if (currentConfig.checkLen && (durationMin < currentConfig.minLen || durationMin > currentConfig.maxLen)) {
+                if (!isShort && currentConfig.checkLen && (durationMin < currentConfig.minLen || durationMin > currentConfig.maxLen)) {
                     isValid = false;
                     rejectReasons.push(`Dài ${Math.round(durationMin)}m`);
                 }
@@ -305,16 +331,16 @@ async function processVideos() {
                     isValid = false;
                     rejectReasons.push(`Thiếu View (${viewsStr.trim()})`);
                 }
-                if (currentConfig.checkTime && daysAgo > currentConfig.maxDays) {
+                if (!isShort && currentConfig.checkTime && daysAgo > currentConfig.maxDays) {
                     isValid = false;
                     rejectReasons.push(`Quá Cũ (${daysAgo} ngày)`);
                 }
 
-                let meetsRequirements = isValid; 
+                let meetsRequirements = isValid;
 
                 // --- BƯỚC 2: KIỂM TRA HISTORY (SEQUENTIAL WAIT) ---
                 let isInHistory = false;
-                
+
                 // Trích xuất Video ID chính xác hơn bằng Regex
                 let videoId = "";
                 const vidMatch = url.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/);
@@ -350,7 +376,7 @@ async function processVideos() {
                 }
 
                 // --- BƯỚC 3: DỰNG GIAO DIỆN ---
-                let thumbnail = item.querySelector('ytd-thumbnail');
+                let thumbnail = item.querySelector('ytd-thumbnail, yt-thumbnail-view-model');
                 if (thumbnail) {
                     // Cleanup
                     let oldOverlay = item.querySelector('.yt-ext-overlay');
@@ -523,7 +549,7 @@ async function processVideos() {
 
 function sendDownloadRequest(url, quality, btnElement) {
     // Không thay đổi trạng thái nút bấm ở đây nữa theo yêu cầu - Giữ nguyên giao diện
-    
+
     fetch('http://127.0.0.1:8000/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -571,7 +597,7 @@ function updateUIDownloaded(url, btnElement) {
             hashtag.style.zIndex = '100';
             overlay.appendChild(hashtag);
         }
-        
+
         hashtag.innerText = 'Downloaded';
         hashtag.style.backgroundColor = 'rgba(107, 114, 128, 0.9)';
         hashtag.classList.add('is-downloaded');
@@ -579,7 +605,7 @@ function updateUIDownloaded(url, btnElement) {
         // Bỏ chọn checkbox
         const cb = overlay.querySelector('.yt-ext-checkbox');
         if (cb) cb.checked = false;
-        
+
         // Xóa khỏi danh sách chờ bulk download
         bulkDownloadItems.delete(url);
     }
@@ -593,6 +619,8 @@ let isManualSelectionMode = false;
 let manuallySelectedItems = new Map(); // Link element thumbnail => URL video
 
 document.addEventListener('keydown', (e) => {
+    if (!window.location.hostname.includes("youtube.com")) return;
+
     // Nhấn Alt + S để Ép quét lại toàn bộ trang (Dùng khi đổi Tab mà chưa thấy kết quả)
     if (e.altKey && (e.code === 'KeyS' || e.key.toLowerCase() === 's')) {
         e.preventDefault();
@@ -676,7 +704,7 @@ function submitManualSelection() {
 }
 
 document.addEventListener('click', (e) => {
-    if (!isManualSelectionMode) return;
+    if (!window.location.hostname.includes("youtube.com") || !isManualSelectionMode) return;
 
     let container = e.target.closest('ytd-rich-item-renderer, ytd-video-renderer, ytd-grid-video-renderer, ytd-compact-video-renderer');
 
@@ -703,3 +731,210 @@ document.addEventListener('click', (e) => {
         }
     }
 }, true);
+
+// =========================================================
+// WIDGET NỔI ĐỂ DÁN LINK TRỰC TIẾP (DIRECT DOWNLOAD MODE)
+// =========================================================
+
+let isDragging = false;
+let widgetOffsetX = 0;
+let widgetOffsetY = 0;
+
+function initFloatingWidget() {
+    if (document.getElementById('yt-ext-floating-widget')) return;
+
+    // Load state từ storage để đồng bộ
+    chrome.storage.local.get(['widgetPos', 'widgetText'], (res) => {
+        const top = res.widgetPos?.top || '100px';
+        const left = res.widgetPos?.left || '20px';
+        const text = res.widgetText || '';
+
+        const widgetHTML = `
+            <div id="yt-ext-floating-widget" style="top: ${top}; left: ${left};">
+                <div class="widget-header">
+                    <span class="widget-title">Tải Link Nhanh</span>
+                    <button class="widget-close" title="Tắt chế độ này">✕</button>
+                </div>
+                <div class="widget-body">
+                    <textarea id="yt-ext-direct-links" placeholder="Dán các link YouTube vào đây...&#10;Mỗi dòng một link." spellcheck="false">${text}</textarea>
+                    <div class="widget-footer">
+                        <span id="yt-ext-link-count">0 link</span>
+                        <button id="yt-ext-direct-dl-btn">TẢI XUỐNG</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', widgetHTML);
+
+        // Add CSS for widget if not exists yet
+        if (!document.getElementById('yt-ext-widget-style')) {
+            const style = document.createElement('style');
+            style.id = 'yt-ext-widget-style';
+            style.textContent = `
+                #yt-ext-floating-widget {
+                    position: fixed;
+                    width: 280px;
+                    background: rgba(24, 24, 27, 0.75);
+                    backdrop-filter: blur(10px);
+                    -webkit-backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.1);
+                    border-radius: 12px;
+                    z-index: 9999999;
+                    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+                    font-family: 'Segoe UI', Tahoma, Verdana, sans-serif;
+                    overflow: hidden;
+                    transition: opacity 0.2s;
+                }
+                #yt-ext-floating-widget:not(:hover):not(:focus-within) {
+                    opacity: 0.6;
+                }
+                .widget-header {
+                    background: rgba(39, 39, 42, 0.9);
+                    padding: 8px 12px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    cursor: move;
+                    user-select: none;
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                }
+                .widget-title { color: #fff; font-size: 13px; font-weight: bold; }
+                .widget-close { 
+                    background: none; border: none; color: #a1a1aa; cursor: pointer; font-size: 14px; padding: 0;
+                }
+                .widget-close:hover { color: #f87171; }
+                .widget-body { padding: 10px; }
+                #yt-ext-direct-links {
+                    width: 100%; height: 80px; resize: none; background: rgba(0,0,0,0.4);
+                    color: #e4e4e7; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+                    padding: 8px; font-size: 11px; box-sizing: border-box; outline: none;
+                }
+                #yt-ext-direct-links:focus { border-color: #3b82f6; }
+                .widget-footer {
+                    display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
+                }
+                #yt-ext-link-count { color: #a1a1aa; font-size: 11px; }
+                #yt-ext-direct-dl-btn {
+                    background: #22c55e; color: white; border: none; padding: 6px 12px;
+                    border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; text-transform: uppercase;
+                }
+                #yt-ext-direct-dl-btn:hover { background: #16a34a; }
+            `;
+            document.head.appendChild(style);
+        }
+
+        bindWidgetEvents();
+        updateLinkCount();
+    });
+}
+
+function removeFloatingWidget() {
+    const el = document.getElementById('yt-ext-floating-widget');
+    if (el) el.remove();
+}
+
+function bindWidgetEvents() {
+    const widget = document.getElementById('yt-ext-floating-widget');
+    const header = widget.querySelector('.widget-header');
+    const closeBtn = widget.querySelector('.widget-close');
+    const textarea = document.getElementById('yt-ext-direct-links');
+    const dlBtn = document.getElementById('yt-ext-direct-dl-btn');
+
+    // --- Xử lý Drag & Drop ---
+    header.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        widgetOffsetX = e.clientX - widget.getBoundingClientRect().left;
+        widgetOffsetY = e.clientY - widget.getBoundingClientRect().top;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        let newX = e.clientX - widgetOffsetX;
+        let newY = e.clientY - widgetOffsetY;
+
+        // Không cho phép kéo ra khỏi màn hình
+        newX = Math.max(0, Math.min(newX, window.innerWidth - widget.offsetWidth));
+        newY = Math.max(0, Math.min(newY, window.innerHeight - widget.offsetHeight));
+
+        widget.style.left = `${newX}px`;
+        widget.style.top = `${newY}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            // Lưu vị trí mới vào storage
+            chrome.storage.local.set({
+                widgetPos: { top: widget.style.top, left: widget.style.left }
+            });
+        }
+    });
+
+    // --- Cập nhật Storage khi gõ ---
+    textarea.addEventListener('input', () => {
+        chrome.storage.local.set({ widgetText: textarea.value });
+        updateLinkCount();
+    });
+
+    // --- Tắt chế độ ---
+    closeBtn.addEventListener('click', () => {
+        // Cập nhật lên config để tắt
+        chrome.storage.local.get(['ytConfig'], (data) => {
+            if (data.ytConfig) {
+                data.ytConfig.directMode = false;
+                chrome.storage.local.set({ ytConfig: data.ytConfig });
+            }
+        });
+        removeFloatingWidget();
+        showToast("Đã tắt chế độ Quăng Link Nổi", 2000);
+    });
+
+    // --- Bấm tải ---
+    dlBtn.addEventListener('click', () => {
+        const text = textarea.value;
+        const links = extractYTLinks(text);
+        if (links.length === 0) {
+            showToast("Vui lòng dán link YouTube hợp lệ!", 2000);
+            return;
+        }
+
+        let q = currentConfig && currentConfig.quality ? currentConfig.quality : '1080';
+        let count = 0;
+
+        links.forEach(url => {
+            sendDownloadRequest(url, q, null);
+            count++;
+        });
+
+        // Clear sau khi đẩy đi
+        textarea.value = '';
+        chrome.storage.local.set({ widgetText: '' });
+        updateLinkCount();
+
+        showToast(`🚀 Đã kết nạp ${count} link vào Máy chủ tải!`, 4000);
+    });
+}
+
+function updateLinkCount() {
+    const textarea = document.getElementById('yt-ext-direct-links');
+    const span = document.getElementById('yt-ext-link-count');
+    if (!textarea || !span) return;
+
+    const count = extractYTLinks(textarea.value).length;
+    span.innerText = `${count} link`;
+    span.style.color = count > 0 ? '#4ade80' : '#a1a1aa';
+}
+
+function extractYTLinks(text) {
+    if (!text) return [];
+    // Tách theo dòng hoặc dấu cách, gạn lọc link
+    const tokens = text.split(/[\s\n]+/);
+    const validLinks = new Set();
+    tokens.forEach(str => {
+        // Rút ngắn kiểm tra link yt
+        if (str.includes('youtube.com/watch') || str.includes('youtu.be/')) {
+            validLinks.add(str.trim());
+        }
+    });
+    return Array.from(validLinks);
+}
