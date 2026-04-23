@@ -86,6 +86,23 @@ function fullReset() {
     processVideos(); // Lập tức ép duyệt lại
 }
 
+// Hàm lấy "dấu vân tay" của nội dung hiện tại (dựa trên 3 video đầu tiên)
+function getContentFingerprint() {
+    const selectors = [
+        'ytd-rich-item-renderer',
+        'ytd-video-renderer',
+        'ytd-grid-video-renderer',
+        'ytd-compact-video-renderer'
+    ];
+    const items = document.querySelectorAll(selectors.join(', '));
+    let fingerprint = "";
+    for (let i = 0; i < Math.min(items.length, 3); i++) {
+        let a = items[i].querySelector('a#video-title, a#video-title-link, a.shortsLockupViewModelHostOutsideMetadataEndpoint');
+        if (a && a.href) fingerprint += a.href;
+    }
+    return fingerprint;
+}
+
 // Bắt sự kiện chuyển hướng trang của YouTube (Single Page App)
 if (window.location.hostname.includes("youtube.com")) {
     window.addEventListener('yt-navigate-finish', () => {
@@ -93,16 +110,27 @@ if (window.location.hostname.includes("youtube.com")) {
         fullReset();
     });
 
-    // Cơ chế Polling URL phòng hờ sự kiện navigate-finish không kích hoạt ổn định
+    // Cơ chế Polling URL và Nội dung (Fingerprinting)
     let lastUrl = location.href;
+    let lastFingerprint = getContentFingerprint();
+
     setInterval(() => {
-        if (location.href !== lastUrl) {
-            lastUrl = location.href;
-            console.log("[YT-EXT] Phát hiện đổi URL (Polling), đang chuẩn bị lọc lại...");
+        const currentUrl = location.href;
+        const currentFingerprint = getContentFingerprint();
+
+        const urlChanged = currentUrl !== lastUrl;
+        // Chỉ coi là đổi nội dung nếu fingerprint hiện tại không rỗng và khác với cái cũ
+        const contentChanged = currentFingerprint !== "" && currentFingerprint !== lastFingerprint;
+
+        if (urlChanged || contentChanged) {
+            lastUrl = currentUrl;
+            lastFingerprint = currentFingerprint;
+            
+            console.log(`[YT-EXT] Phát hiện thay đổi ${urlChanged ? 'URL' : 'Nội dung'}, đang làm mới bộ lọc...`);
             // Delay nhẹ 500ms để chờ Youtube Render sơ bộ nội dung mới
             setTimeout(fullReset, 500);
         }
-    }, 1000);
+    }, 2000);
 }
 
 // ==========================================

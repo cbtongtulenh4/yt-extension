@@ -1,0 +1,419 @@
+/* Overlay chính: mặc định không viền */
+.yt-ext-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    border: 3px solid transparent;
+    border-radius: 12px;
+    z-index: 99;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 12px;
+    pointer-events: auto;
+    box-sizing: border-box;
+    backdrop-filter: blur(2px);
+    transition: all 0.2s ease;
+}
+
+/* Ép thumbnail hiển thị phần nhô ra */
+.yt-ext-thumbnail-container {
+    container-type: inline-size;
+    overflow: visible !important;
+}
+
+/* Hashtag nhô lên trên đỉnh */
+.yt-ext-hashtag {
+    position: absolute;
+    top: -18px;
+    /* Nhô hẳn lên trên */
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: linear-gradient(135deg, #10b981, #059669);
+    /* Emerald gradient */
+    color: white;
+    padding: 4px 18px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.5);
+    z-index: 110;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    white-space: nowrap;
+}
+
+.item-selected .yt-ext-hashtag,
+.yt-ext-hashtag.is-downloaded {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Phân biệt Chọn và Không Chọn (Selection State) */
+.yt-ext-overlay.item-selected {
+    border-color: rgba(34, 197, 94, 0.95) !important;
+    background: rgba(0, 0, 0, 0.15);
+    box-shadow: inset 0 0 15px rgba(34, 197, 94, 0.3);
+    filter: none;
+}
+
+.yt-ext-overlay.item-unselected {
+    border-color: transparent !important;
+    background: rgba(0, 0, 0, 0.55);
+    filter: grayscale(0.6);
+}
+
+/* Trạng thái bỏ Opacity - Giữ nguyên không thay đổi */
+.yt-ext-overlay.fade-info {
+    border-color: transparent !important;
+    background: rgba(0, 0, 0, 0.05);
+    backdrop-filter: none;
+}
+
+.yt-ext-overlay.fade-info>*:not(.yt-ext-opacity-control) {
+    opacity: 0.05;
+    pointer-events: none;
+}
+
+/* Cột bên trái: Checkbox + List Info */
+.yt-ext-left-area {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.yt-ext-top-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.yt-ext-checkbox {
+    width: 26px;
+    /* To hơn */
+    height: 26px;
+    /* To hơn */
+    cursor: pointer;
+    accent-color: #22c55e;
+}
+
+.yt-ext-quality-select {
+    background: #fbbf24;
+    color: #000;
+    padding: 3px 6px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 900;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+    appearance: none;
+    /* Ẩn mũi tên mặc định */
+    text-align: center;
+    width: 65px;
+}
+
+.yt-ext-quality-select:hover {
+    background: #f59e0b;
+}
+
+.yt-ext-quality-select.loading {
+    background: #eab308 !important;
+    animation: yt-ext-pulse 1.5s infinite;
+}
+
+@keyframes yt-ext-pulse {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+.yt-ext-info-item {
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    /* Chỉnh nhỏ lại chút cho cân đối */
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.yt-ext-info-item span:first-child {
+    font-size: 16px;
+    /* Icon to hơn */
+}
+
+/* Góc phải trên: Nút download */
+.yt-ext-right-top {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+}
+
+.yt-ext-dl-btn-small {
+    background: #22c55e;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    width: 50px;
+    /* To hơn */
+    height: 44px;
+    /* To hơn */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 24px;
+    /* Icon to hơn */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.6);
+    transition: transform 0.2s;
+}
+
+.yt-ext-dl-btn-small:hover {
+    transform: scale(1.15);
+    background: #16a34a;
+}
+
+/* Góc phải dưới: Control Opacity */
+.yt-ext-opacity-control {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(30, 30, 30, 0.95);
+    padding: 6px 12px;
+    /* To hơn */
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff;
+    font-size: 12px;
+    /* To hơn: 12px */
+    font-weight: 800;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    z-index: 102;
+    opacity: 1 !important;
+}
+
+.yt-ext-opacity-toggle {
+    cursor: pointer;
+    width: 18px;
+    /* To hơn */
+    height: 18px;
+    /* To hơn */
+}
+
+ytd-thumbnail {
+    position: relative !important;
+}
+
+/* --- MANUAL SELECTION (CHỌN THỦ CÔNG) --- */
+body.yt-ext-manual-mode ytd-thumbnail {
+    cursor: copy !important;
+}
+
+/* Khung Viền mờ báo hiệu khi Hover chuột vào video */
+body.yt-ext-manual-mode ytd-thumbnail::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    box-shadow: inset 0 0 0 4px transparent;
+    transition: box-shadow 0.2s;
+    z-index: 100;
+    pointer-events: none;
+    border-radius: 12px;
+}
+
+body.yt-ext-manual-mode ytd-thumbnail:hover::before {
+    box-shadow: inset 0 0 0 6px #3b82f6 !important;
+    /* Xanh dương khi hover */
+}
+
+/* Frame khi video Đã Được Chọn */
+.yt-ext-manual-selected::after {
+    content: '✅ ĐÃ CHỌN';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #22c55e;
+    color: white;
+    font-weight: 800;
+    font-size: 15px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    z-index: 101;
+    pointer-events: none;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6);
+}
+
+.yt-ext-manual-selected::before {
+    box-shadow: inset 0 0 0 6px #22c55e !important;
+    /* Xanh lá khi đã click chọn */
+}
+
+/* Toast Thông báo trôi nổi dưới màn hình */
+#yt-ext-toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(24, 24, 27, 0.95);
+    color: #fff;
+    padding: 14px 28px;
+    border-radius: 8px;
+    border: 2px solid #3b82f6;
+    font-size: 16px;
+    font-weight: bold;
+    z-index: 9999999;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    display: none;
+    pointer-events: none;
+    text-align: center;
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
+#yt-ext-toast.show {
+    display: block;
+    animation: slideUp 0.3s ease-out forwards;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+/* ==========================================
+   CONTAINER QUERIES: THU NHỎ KHI THUMBNAIL NHỎ
+   ========================================== */
+
+/* --- CẤP ĐỘ 1: Thumbnail bắt đầu nhỏ (Rộng < 220px) --- */
+@container (max-width: 280px) {
+    .yt-ext-overlay {
+        padding: 8px;
+    }
+
+    .yt-ext-left-area {
+        gap: 4px;
+    }
+
+    .yt-ext-dl-btn-small {
+        width: 38px;
+        height: 34px;
+        font-size: 18px;
+    }
+
+    .yt-ext-right-top {
+        top: 8px;
+        right: 8px;
+    }
+
+    .yt-ext-quality-select {
+        width: 55px;
+        padding: 2px 4px;
+        font-size: 11px;
+    }
+
+    .yt-ext-checkbox {
+        width: 20px;
+        height: 20px;
+    }
+
+    .yt-ext-info-item {
+        padding: 2px 6px;
+        font-size: 10px;
+        gap: 4px;
+    }
+
+    .yt-ext-info-item span:first-child {
+        font-size: 12px;
+    }
+
+    .yt-ext-opacity-control {
+        bottom: 6px;
+        right: 6px;
+        padding: 4px 8px;
+        font-size: 10px;
+    }
+}
+
+/* --- CẤP ĐỘ 2: Thumbnail rất nhỏ (Rộng < 160px - Ví dụ sidebar) --- */
+@container (max-width: 160px) {
+    .yt-ext-overlay {
+        padding: 4px;
+    }
+
+    .yt-ext-dl-btn-small {
+        width: 30px;
+        height: 26px;
+        font-size: 14px;
+        border-radius: 6px;
+    }
+
+    .yt-ext-left-area {
+        gap: 2px;
+    }
+
+    .yt-ext-info-item {
+        font-size: 9px;
+        padding: 1px 4px;
+        border-radius: 4px;
+    }
+
+    .yt-ext-quality-select {
+        width: 45px;
+        font-size: 9px;
+    }
+
+    .yt-ext-hashtag {
+        font-size: 8px;
+        padding: 2px 8px;
+        top: -12px;
+    }
+
+    .yt-ext-top-left {
+        gap: 4px;
+    }
+
+    .yt-ext-checkbox {
+        width: 16px;
+        height: 16px;
+    }
+
+    .yt-ext-opacity-control {
+        display: none;
+        /* Rất nhỏ thì nên ẩn bớt control phụ */
+    }
+}
