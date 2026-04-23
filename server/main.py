@@ -14,12 +14,19 @@ import random
 # do mã global trong yt_url.py tự thực thi.
 from yt_url import get_ffmpeg_path 
 
+def get_base_dir():
+    """Lấy đường dẫn thư mục gốc, hỗ trợ cả khi chạy script và khi đã đóng gói .exe"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+BASE_DIR = get_base_dir()
+
 class ProxyManager:
     def __init__(self, proxy_file="proxies.txt"):
         # Tự động lấy đường dẫn tuyệt đối cùng thư mục với main.py nếu là file name thông thường
         if not os.path.isabs(proxy_file) and "\\" not in proxy_file and "/" not in proxy_file:
-            base_path = os.path.dirname(os.path.abspath(__file__))
-            proxy_file = os.path.join(base_path, proxy_file)
+            proxy_file = os.path.join(BASE_DIR, proxy_file)
             
         self.proxy_file = proxy_file
         print(f"[*] ProxyManager using file: {self.proxy_file}")
@@ -73,7 +80,7 @@ class ProxyManager:
 # proxy_manager = ProxyManager()
 
 # --- QUẢN LÝ LỊCH SỬ TẢI ---
-HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history.txt")
+HISTORY_FILE = os.path.join(BASE_DIR, "history.txt")
 downloaded_ids = set()
 
 def load_history():
@@ -103,7 +110,7 @@ def save_to_history(video_id):
 load_history()
 
 # --- QUẢN LÝ LINK LỖI ---
-ERROR_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "failed_links.txt")
+ERROR_FILE = os.path.join(BASE_DIR, "failed_links.txt")
 
 def save_to_errors(url):
     if not url: return
@@ -216,12 +223,7 @@ def process_download(url: str, quality: str = "1080", output_dir: str = "Downloa
     vid_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", url)
     vid = vid_match.group(1) if vid_match else url
 
-    if getattr(sys, 'frozen', False):
-        base_dir = os.path.dirname(sys.executable)
-    else:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        
-    final_output_dir = os.path.join(base_dir, output_dir)
+    final_output_dir = os.path.join(BASE_DIR, output_dir)
     os.makedirs(final_output_dir, exist_ok=True)
     
     def progress_hook(d):
@@ -367,10 +369,18 @@ def get_download_status(url: str):
     }
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8000)
-    args = parser.parse_args()
+    try:
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--host", default="0.0.0.0")
+        parser.add_argument("--port", type=int, default=18282)
+        args = parser.parse_args()
+        
+        if getattr(sys, 'frozen', False):
+            uvicorn.run(app, host=args.host, port=args.port)
+        else:
+            uvicorn.run("main:app", host=args.host, port=args.port, reload=True)
+    except Exception as e:
+        print(f"[ERROR]: {e}")
+    input("Press Enter to exit...")
     
-    uvicorn.run("main:app", host=args.host, port=args.port, reload=True)

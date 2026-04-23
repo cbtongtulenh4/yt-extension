@@ -94,6 +94,21 @@
             padding: 10px;
             background: #27272a;
             border-radius: 8px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+            border: 1px solid #3f3f46;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .status-container:hover {
+            background: #3f3f46;
+            border-color: #52525b;
+            transform: translateY(-1px);
+        }
+
+        .status-container:active {
+            transform: translateY(1px);
         }
 
         .status-idle {
@@ -187,9 +202,10 @@
         <input type="number" id="config-max-days" value="30" style="width: 80px;">
     </div>
 
+    <input type="checkbox" id="config-check-auto" style="display: none;">
+
     <div class="form-row">
-        <label class="checkbox-label" title="Bật để bắt đầu tự động quét video hợp lệ">
-            <input type="checkbox" id="config-check-auto">
+        <label class="checkbox-label" title="Nhập số lượng video muốn tự động tick chọn. Để 0 sẽ không tự động chọn.">
             Số lượng Auto Tìm:
         </label>
         <input type="number" id="config-max-count" value="0" style="width: 80px;" min="0">
@@ -211,7 +227,7 @@
         </label>
     </div>
 
-    <div class="status-container">
+    <div class="status-container" id="status-toggle-btn" title="Nhấn để Bật/Tắt Auto-Scan">
         Auto-Scan: <span id="scan-status" class="status-idle">💤 Đã Tắt</span>
     </div>
 

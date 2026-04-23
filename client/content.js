@@ -267,6 +267,9 @@ let isScanning = false;
 
 // Hàm duyệt tìm video (Đã chuyển sang Async để thực hiện check tuần tự)
 async function processVideos() {
+    // Bật/tắt toàn bộ quá trình scan dựa trên Auto-Scan
+    if (!currentConfig.checkAuto) return;
+
     if (isScanning) return;
     isScanning = true;
 
@@ -352,7 +355,7 @@ async function processVideos() {
 
                 if (videoId) {
                     try {
-                        const hRes = await fetch(`http://127.0.0.1:8000/api/check_history?video_id=${videoId}`);
+                        const hRes = await fetch(`http://127.0.0.1:18282/api/check_history?video_id=${videoId}`);
                         const hData = await hRes.json();
                         isInHistory = hData.downloaded;
                     } catch (e) {
@@ -368,9 +371,9 @@ async function processVideos() {
                 }
 
                 // Kiểm tra ĐỊNH MỨC QUÉT TỰ ĐỘNG
-                if (!currentConfig.checkAuto) {
-                    isValid = false;
-                } else if (isValid && currentConfig.maxCount > 0 && validFoundCount >= currentConfig.maxCount) {
+                if (currentConfig.maxCount <= 0) {
+                    isValid = false; // Bằng 0 thì mặc định không select
+                } else if (isValid && validFoundCount >= currentConfig.maxCount) {
                     isValid = false;
                     rejectReasons.push(`Đã đạt Max (${currentConfig.maxCount})`);
                 }
@@ -550,7 +553,7 @@ async function processVideos() {
 function sendDownloadRequest(url, quality, btnElement) {
     // Không thay đổi trạng thái nút bấm ở đây nữa theo yêu cầu - Giữ nguyên giao diện
 
-    fetch('http://127.0.0.1:8000/api/download', {
+    fetch('http://127.0.0.1:18282/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: url, quality: quality, output_dir: "Downloads" })

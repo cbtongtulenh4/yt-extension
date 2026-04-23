@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('config-max-count').value = data.ytConfig.maxCount !== undefined ? data.ytConfig.maxCount : 0;
             document.getElementById('config-only-valid').checked = data.ytConfig.onlyValid !== undefined ? data.ytConfig.onlyValid : false;
             document.getElementById('config-direct-mode').checked = data.ytConfig.directMode !== undefined ? data.ytConfig.directMode : false;
-            updateStatusLabel(data.ytConfig.checkAuto ? (data.ytConfig.maxCount || 0) : 0);
+            updateStatusLabel(data.ytConfig.checkAuto !== undefined ? data.ytConfig.checkAuto : false, data.ytConfig.maxCount !== undefined ? data.ytConfig.maxCount : 0);
         } else {
             // Save defaults
             saveAndSyncConfig();
@@ -33,6 +33,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 input.timer = setTimeout(saveAndSyncConfig, 300); // Nhanh hơn: 300ms
             });
         }
+    });
+
+    // 2.5 Lắng nghe sự kiện click vào nút Auto-Scan to
+    document.getElementById('status-toggle-btn').addEventListener('click', () => {
+        const autoCheck = document.getElementById('config-check-auto');
+        autoCheck.checked = !autoCheck.checked;
+        saveAndSyncConfig();
     });
 
     // 3. Nút Download Hàng Loạt (Gửi lệnh gộp)
@@ -94,7 +101,7 @@ function saveAndSyncConfig() {
     };
 
     // Cập nhật nhãn trạng thái cục bộ dựa trên checkbox Auto
-    updateStatusLabel(isAutoChecked ? safeMaxVal : 0);
+    updateStatusLabel(isAutoChecked, safeMaxVal);
 
     chrome.storage.local.set({ ytConfig: newConfig }, () => {
         // Sync xuống Tab đang mở
@@ -109,13 +116,18 @@ function saveAndSyncConfig() {
     });
 }
 
-function updateStatusLabel(maxCount) {
+function updateStatusLabel(isAutoChecked, maxCount) {
     const status = document.getElementById('scan-status');
-    if (maxCount > 0) {
-        status.textContent = "📡 Đang Hoạt Động";
-        status.className = "status-active";
+    if (isAutoChecked) {
+        if (maxCount > 0) {
+            status.textContent = `📡 Đang Quét (${maxCount})`;
+            status.className = "status-active";
+        } else {
+            status.textContent = "⏸️ Không Chọn (Max=0)";
+            status.className = "status-idle";
+        }
     } else {
-        status.textContent = "💤 Đã Tắt";
+        status.textContent = "💤 Đã Tắt Scan";
         status.className = "status-idle";
     }
 }
