@@ -1,9 +1,14 @@
 let currentConfig = {
     quality: '1080', minLen: 0, maxLen: 60, checkViews: true, minView: 100000, checkTime: true, maxDays: 30, maxCount: 0
 };
-let validFoundCount = 0;
-let scanInterval = null;
-let bulkDownloadItems = new Map(); // Link Element Youtube => Nút bấm Button để auto nhấn
+
+// Hệ thống quản lý trạng thái phiên quét (State Object)
+let scanState = {
+    version: 0,
+    validFoundCount: 0,
+    bulkDownloadItems: new Map() // Link Element Youtube => Nút bấm Button
+};
+
 let videoQualitiesCache = new Map(); // Cache lưu quality từ server: URL => [2160, 1080, ...]
 
 // ==========================================
@@ -57,7 +62,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     } else if (request.action === "BULK_DOWNLOAD") {
         let count = 0;
-        bulkDownloadItems.forEach((data, url) => {
+        scanState.bulkDownloadItems.forEach((data, url) => {
             // Kiểm tra data.btn (nút download) có sẵn sàng không
             if (data.btn && !data.btn.disabled) {
                 const quality = data.select ? data.select.value : (currentConfig.quality || '1080');
@@ -73,9 +78,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Hàm reset trạng thái toàn cục (Dùng khi đổi trang hoặc đổi cấu hình)
 function fullReset() {
+    // Tạo một phiên quét mới hoàn toàn (Hồ sơ mới)
+    scanState = {
+        version: scanState.version + 1,
+        validFoundCount: 0,
+        bulkDownloadItems: new Map()
+    };
+    isScanning = false;   // Phá khóa để luồng quét mới có thể chạy ngay lập tức
+
     resetProcessedItems();
-    validFoundCount = 0;
-    bulkDownloadItems.clear();
 
     // Xóa bộ nhớ chọn thủ công khi chuyển trang hoặc đổi cấu hình
     manuallySelectedItems.clear();
@@ -123,6 +134,14 @@ if (window.location.hostname.includes("youtube.com")) {
         const contentChanged = currentFingerprint !== "" && currentFingerprint !== lastFingerprint;
 
         if (urlChanged || contentChanged) {
+            // HỦY DIỆT PHIÊN QUÉT CŨ (Bằng cách tạo một hồ sơ mới ngay lập tức)
+            scanState = {
+                version: scanState.version + 1,
+                validFoundCount: 0,
+                bulkDownloadItems: new Map()
+            };
+            isScanning = false;
+
             lastUrl = currentUrl;
             lastFingerprint = currentFingerprint;
             
@@ -301,6 +320,8 @@ async function processVideos() {
     if (isScanning) return;
     isScanning = true;
 
+    const myState = scanState; // "Bắt" lấy hồ sơ phiên quét tại thời điểm này
+
     try {
         const videoSelectors = [
             'ytd-rich-item-renderer',
@@ -310,8 +331,16 @@ async function processVideos() {
         ];
 
         const items = document.querySelectorAll(videoSelectors.join(', '));
+        let itemIndex = 0;
 
         for (const item of items) {
+            itemIndex++;
+            // KIỂM TRA PHIÊN QUÉT: Nếu đã có hồ sơ mới, dừng ngay luồng này
+            if (myState !== scanState) {
+                console.log("[YT-EXT] Luồng quét cũ đã dừng hẳn.");
+                return;
+            }
+
             try {
                 let titleEl = item.querySelector('a#video-title, a#video-title-link, a.shortsLockupViewModelHostOutsideMetadataEndpoint');
                 if (!titleEl) continue;
@@ -350,6 +379,23 @@ async function processVideos() {
                 let views = parseViewsStr(viewsStr);
                 let daysAgo = parseTimeAgoStr(timeAgoStr);
 
+                // KIỂM TRA DỮ LIỆU SẴN SÀNG (Cơ chế Dừng và Chờ để bảo toàn thứ tự)
+                let isMissingData = false;
+                if (currentConfig.checkViews && !viewsStr) isMissingData = true;
+                if (!isShort && currentConfig.checkTime && !timeAgoStr) isMissingData = true;
+
+                if (isMissingData) {
+                    let waitCount = parseInt(item.dataset.ytExtWaitCount || 0);
+                    if (waitCount < 5) { // Chờ tối đa 5 chu kỳ quét (mỗi chu kỳ 2s => ~10 giây)
+                        item.dataset.ytExtWaitCount = waitCount + 1;
+                        // console.log(`[YT-EXT] Đang chờ dữ liệu video (${waitCount + 1}/5)...`);
+                        break; // DỪNG TOÀN BỘ vòng lặp để bảo toàn thứ tự ưu tiên
+                    } else {
+                        console.warn("[YT-EXT] Quá thời gian chờ dữ liệu (10s), bỏ qua video này để khai thông hàng đợi.");
+                        // Sau 10s không thấy dữ liệu thì cho phép đi tiếp (thường sẽ bị loại vì View = 0)
+                    }
+                }
+
                 let isValid = true;
                 let rejectReasons = [];
 
@@ -384,6 +430,10 @@ async function processVideos() {
                 if (videoId) {
                     try {
                         const hRes = await fetch(`http://127.0.0.1:18282/api/check_history?video_id=${videoId}`);
+                        
+                        // KIỂM TRA PHIÊN QUÉT: Đề phòng reset trong lúc chờ fetch
+                        if (myState !== scanState) return;
+
                         const hData = await hRes.json();
                         isInHistory = hData.downloaded;
                     } catch (e) {
@@ -401,7 +451,7 @@ async function processVideos() {
                 // Kiểm tra ĐỊNH MỨC QUÉT TỰ ĐỘNG
                 if (currentConfig.maxCount <= 0) {
                     isValid = false; // Bằng 0 thì mặc định không select
-                } else if (isValid && validFoundCount >= currentConfig.maxCount) {
+                } else if (isValid && myState.validFoundCount >= currentConfig.maxCount) {
                     isValid = false;
                     rejectReasons.push(`Đã đạt Max (${currentConfig.maxCount})`);
                 }
@@ -507,6 +557,22 @@ async function processVideos() {
 
                     thumbnail.appendChild(overlay);
 
+                    // NGĂN CLICK TRÔI XUỐNG DƯỚI (Phòng thủ trên từng nút bấm)
+                    const stopEvents = ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup'];
+                    
+                    // Chặn trên toàn bộ Overlay (vùng trống)
+                    stopEvents.forEach(ev => {
+                        overlay.addEventListener(ev, (e) => e.stopPropagation());
+                    });
+
+                    // Chặn đặc biệt trên các nút điều khiển để đảm bảo 100% không lọt
+                    [qualitySelect, mainCheckbox, dlBtn, opacityToggle].forEach(el => {
+                        if (!el) return;
+                        stopEvents.forEach(ev => {
+                            el.addEventListener(ev, (e) => e.stopPropagation());
+                        });
+                    });
+
                     // Events
                     qualitySelect.addEventListener('mousedown', (e) => {
                         if (qualitySelect.dataset.fetched !== "true" && qualitySelect.dataset.loading !== "true") {
@@ -514,6 +580,8 @@ async function processVideos() {
                             fetchVideoQualitiesFromClient(url, qualitySelect);
                         }
                     });
+
+                    qualitySelect.addEventListener('click', (e) => e.stopPropagation());
 
                     // --- BƯỚC 4: LOAD QUALITY (NẾU READY) ---
                     if (isValid) {
@@ -541,17 +609,18 @@ async function processVideos() {
                     });
 
                     if (isValid) {
-                        bulkDownloadItems.set(url, { btn: dlBtn, select: qualitySelect });
-                        validFoundCount++;
+                        console.log(`[YT-EXT] [READY] #${itemIndex} | ${isShort ? '[SHORT]' : '[VIDEO]'} | Views: ${viewsStr.trim()} | Time: ${durationStr} | URL: ${url}`);
+                        myState.bulkDownloadItems.set(url, { btn: dlBtn, select: qualitySelect });
+                        myState.validFoundCount++;
                     }
 
                     mainCheckbox.addEventListener('change', () => {
                         const isChecked = mainCheckbox.checked;
                         updateSelectionStatus(isChecked);
                         if (isChecked) {
-                            bulkDownloadItems.set(url, { btn: dlBtn, select: qualitySelect });
+                            myState.bulkDownloadItems.set(url, { btn: dlBtn, select: qualitySelect });
                         } else {
-                            bulkDownloadItems.delete(url);
+                            myState.bulkDownloadItems.delete(url);
                         }
                     });
 
@@ -574,7 +643,10 @@ async function processVideos() {
     } catch (err) {
         console.error("[YT-EXT] Lỗi quét chính:", err);
     } finally {
-        isScanning = false;
+        // Chỉ mở khóa scanning nếu phiên quét này vẫn là phiên mới nhất
+        if (myState === scanState) {
+            isScanning = false;
+        }
     }
 }
 
@@ -638,7 +710,7 @@ function updateUIDownloaded(url, btnElement) {
         if (cb) cb.checked = false;
 
         // Xóa khỏi danh sách chờ bulk download
-        bulkDownloadItems.delete(url);
+        scanState.bulkDownloadItems.delete(url);
     }
 }
 
