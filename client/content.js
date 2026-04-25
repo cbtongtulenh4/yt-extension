@@ -558,32 +558,53 @@ async function processVideos() {
                     overlay.appendChild(opacityCtrl);
 
                     thumbnail.appendChild(overlay);
+                    const stopEvents = ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart'];
 
-                    // NGĂN CLICK TRÔI XUỐNG DƯỚI (Phòng thủ trên từng nút bấm)
-                    const stopEvents = ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup'];
+                    // 1. ĐẶC TRỊ CHO SHORTS (Chặn hành vi chuyển trang tại cấp Renderer)
+                    if (isShort) {
+                        stopEvents.forEach(ev => {
+                            item.addEventListener(ev, (e) => {
+                                if (overlay.contains(e.target)) {
+                                    // Chặn đứng hành vi chuyển hướng của YouTube (Default Action)
+                                    // Ngoại trừ mousedown/pointerdown trên Select để dropdown trình duyệt có thể mở
+                                    const isSelect = (e.target === qualitySelect || qualitySelect.contains(e.target));
+                                    if (!((ev === 'mousedown' || ev === 'pointerdown') && isSelect)) {
+                                        e.preventDefault();
+                                    }
+                                    // TUYỆT ĐỐI không gọi stopPropagation ở đây để sự kiện truyền vào các nút bấm
+                                }
+                            }, { capture: true });
+                        });
+                    }
 
-                    // Chặn trên toàn bộ Overlay (vùng trống)
-                    stopEvents.forEach(ev => {
-                        overlay.addEventListener(ev, (e) => e.stopPropagation());
-                    });
-
-                    // Chặn đặc biệt trên các nút điều khiển để đảm bảo 100% không lọt
+                    // 2. CHẶN TRÊN CÁC NÚT ĐIỀU KHIỂN (Xử lý nội bộ Extension)
                     [qualitySelect, mainCheckbox, dlBtn, opacityToggle].forEach(el => {
                         if (!el) return;
                         stopEvents.forEach(ev => {
-                            el.addEventListener(ev, (e) => e.stopPropagation());
+                            el.addEventListener(ev, (e) => {
+                                e.stopPropagation();
+                                e.stopImmediatePropagation();
+                                
+                                // Logic fetch dữ liệu khi click "Quality"
+                                if (ev === 'mousedown' && el === qualitySelect) {
+                                    if (qualitySelect.dataset.fetched !== "true" && qualitySelect.dataset.loading !== "true") {
+                                        e.preventDefault();
+                                        fetchVideoQualitiesFromClient(url, qualitySelect);
+                                    }
+                                }
+                            }, { capture: true });
                         });
                     });
 
-                    // Events
-                    qualitySelect.addEventListener('mousedown', (e) => {
-                        if (qualitySelect.dataset.fetched !== "true" && qualitySelect.dataset.loading !== "true") {
-                            e.preventDefault();
-                            fetchVideoQualitiesFromClient(url, qualitySelect);
-                        }
+                    // 2. CHẶN TRÊN NỀN OVERLAY (Dùng BUBBLE để không chặn các con bên trong)
+                    stopEvents.forEach(ev => {
+                        overlay.addEventListener(ev, (e) => {
+                            // Chặn đứng sự kiện nổi bọt lên thẻ <a> của YouTube
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            e.preventDefault(); // Chặn hành vi chuyển trang mặc định
+                        }, false);
                     });
-
-                    qualitySelect.addEventListener('click', (e) => e.stopPropagation());
 
                     // --- BƯỚC 4: LOAD QUALITY (NẾU READY) ---
                     if (isValid) {
