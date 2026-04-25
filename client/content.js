@@ -479,6 +479,8 @@ async function processVideos() {
                     thumbnail.classList.add('yt-ext-thumbnail-container');
                     const overlay = document.createElement('div');
                     let overlayClass = 'yt-ext-overlay ';
+                    if (isShort) overlayClass += 'is-shorts-overlay ';
+
                     if (isValid) {
                         overlayClass += 'is-valid item-selected';
                     } else {
@@ -558,53 +560,96 @@ async function processVideos() {
                     overlay.appendChild(opacityCtrl);
 
                     thumbnail.appendChild(overlay);
-                    const stopEvents = ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart'];
+                    // const stopEvents = ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart'];
 
-                    // 1. ĐẶC TRỊ CHO SHORTS (Chặn hành vi chuyển trang tại cấp Renderer)
-                    if (isShort) {
-                        stopEvents.forEach(ev => {
-                            item.addEventListener(ev, (e) => {
-                                if (overlay.contains(e.target)) {
-                                    // Chặn đứng hành vi chuyển hướng của YouTube (Default Action)
-                                    // Ngoại trừ mousedown/pointerdown trên Select để dropdown trình duyệt có thể mở
-                                    const isSelect = (e.target === qualitySelect || qualitySelect.contains(e.target));
-                                    if (!((ev === 'mousedown' || ev === 'pointerdown') && isSelect)) {
-                                        e.preventDefault();
-                                    }
-                                    // TUYỆT ĐỐI không gọi stopPropagation ở đây để sự kiện truyền vào các nút bấm
-                                }
-                            }, { capture: true });
-                        });
-                    }
+                    // // 1. ĐẶC TRỊ CHO SHORTS (Chặn trực tiếp trên các thẻ <a> để không làm liệt nút bấm)
+                    // if (isShort) {
+                    //     const links = item.querySelectorAll('a');
+                    //     links.forEach(a => {
+                    //         stopEvents.forEach(ev => {
+                    //             a.addEventListener(ev, (e) => {
+                    //                 if (overlay.contains(e.target)) {
+                    //                     const isSelect = (e.target === qualitySelect || qualitySelect.contains(e.target));
+                    //                     const isCheckbox = (e.target.type === 'checkbox' || e.target.classList.contains('yt-ext-checkbox') || e.target.classList.contains('yt-ext-opacity-toggle'));
 
-                    // 2. CHẶN TRÊN CÁC NÚT ĐIỀU KHIỂN (Xử lý nội bộ Extension)
+                    //                     if (ev === 'click' || ev === 'mousedown') {
+                    //                         console.log(`[YT-EXT] [Shorts-Link] ${ev} | Target: ${e.target.className} | Select: ${isSelect} | CB: ${isCheckbox}`);
+                    //                     }
+
+                    //                     // Nếu click vào select hoặc checkbox, ta KHÔNG preventDefault ở đây 
+                    //                     // để trình duyệt xử lý hành vi mặc định (mở menu / tích chọn).
+                    //                     if (isSelect || isCheckbox) {
+                    //                         e.stopPropagation();
+                    //                         e.stopImmediatePropagation();
+                    //                     } else {
+                    //                         // Click vào nền hoặc nút khác: Chặn đứng hoàn toàn
+                    //                         e.preventDefault();
+                    //                         e.stopPropagation();
+                    //                         e.stopImmediatePropagation();
+                    //                     }
+                    //                 }
+                    //             }, { capture: true });
+                    //         });
+                    //     });
+                    // }
+
+                    // // 2. CHẶN TRÊN CÁC NÚT ĐIỀU KHIỂN (Xử lý nội bộ cho cả 2 loại)
+                    // [qualitySelect, mainCheckbox, dlBtn, opacityToggle].forEach(el => {
+                    //     if (!el) return;
+                    //     stopEvents.forEach(ev => {
+                    //         el.addEventListener(ev, (e) => {
+                    //             if (ev === 'click' || ev === 'mousedown') {
+                    //                 console.log(`[YT-EXT] [Control] ${ev} | Element: ${el.className}`);
+                    //             }
+
+                    //             e.stopPropagation();
+                    //             e.stopImmediatePropagation();
+
+                    //             if (ev === 'mousedown' && el === qualitySelect) {
+                    //                 if (qualitySelect.dataset.fetched !== "true" && qualitySelect.dataset.loading !== "true") {
+                    //                     e.preventDefault();
+                    //                     fetchVideoQualitiesFromClient(url, qualitySelect);
+                    //                 }
+                    //             }
+                    //         }, { capture: true });
+                    //     });
+                    // });
+
+                    // // 3. CHẶN TRÊN NỀN OVERLAY (Lớp bảo vệ cuối)
+                    // stopEvents.forEach(ev => {
+                    //     overlay.addEventListener(ev, (e) => {
+                    //         if (e.target === overlay) {
+                    //             e.stopPropagation();
+                    //             e.stopImmediatePropagation();
+                    //             e.preventDefault();
+                    //         }
+                    //     }, false); 
+                    // });
+
+                    const stopEvents = ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup'];
+
+                    // Chặn trên toàn bộ Overlay (vùng trống)
+                    stopEvents.forEach(ev => {
+                        overlay.addEventListener(ev, (e) => e.stopPropagation());
+                    });
+
+                    // Chặn đặc biệt trên các nút điều khiển để đảm bảo 100% không lọt
                     [qualitySelect, mainCheckbox, dlBtn, opacityToggle].forEach(el => {
                         if (!el) return;
                         stopEvents.forEach(ev => {
-                            el.addEventListener(ev, (e) => {
-                                e.stopPropagation();
-                                e.stopImmediatePropagation();
-                                
-                                // Logic fetch dữ liệu khi click "Quality"
-                                if (ev === 'mousedown' && el === qualitySelect) {
-                                    if (qualitySelect.dataset.fetched !== "true" && qualitySelect.dataset.loading !== "true") {
-                                        e.preventDefault();
-                                        fetchVideoQualitiesFromClient(url, qualitySelect);
-                                    }
-                                }
-                            }, { capture: true });
+                            el.addEventListener(ev, (e) => e.stopPropagation());
                         });
                     });
 
-                    // 2. CHẶN TRÊN NỀN OVERLAY (Dùng BUBBLE để không chặn các con bên trong)
-                    stopEvents.forEach(ev => {
-                        overlay.addEventListener(ev, (e) => {
-                            // Chặn đứng sự kiện nổi bọt lên thẻ <a> của YouTube
-                            e.stopPropagation();
-                            e.stopImmediatePropagation();
-                            e.preventDefault(); // Chặn hành vi chuyển trang mặc định
-                        }, false);
+                    // Events
+                    qualitySelect.addEventListener('mousedown', (e) => {
+                        if (qualitySelect.dataset.fetched !== "true" && qualitySelect.dataset.loading !== "true") {
+                            e.preventDefault();
+                            fetchVideoQualitiesFromClient(url, qualitySelect);
+                        }
                     });
+
+                    qualitySelect.addEventListener('click', (e) => e.stopPropagation());
 
                     // --- BƯỚC 4: LOAD QUALITY (NẾU READY) ---
                     if (isValid) {
@@ -928,7 +973,7 @@ function initFloatingWidget() {
                 .widget-close:hover { color: #f87171; }
                 .widget-body { padding: 10px; }
                 #yt-ext-direct-links {
-                    width: 100%; height: 80px; resize: none; background: rgba(0,0,0,0.4);
+                    width: 100%; height: 150px; resize: none; background: rgba(0,0,0,0.4);
                     color: #e4e4e7; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
                     padding: 8px; font-size: 11px; box-sizing: border-box; outline: none;
                 }

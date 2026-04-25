@@ -19,10 +19,23 @@
     transition: all 0.2s ease;
 }
 
-/* Ép thumbnail hiển thị phần nhô ra */
+/* Quan trọng: Định nghĩa Container để các query @container hoạt động */
 .yt-ext-thumbnail-container {
     container-type: inline-size;
-    overflow: visible !important;
+}
+
+/* Tùy chỉnh riêng cho SHORTS để không bị viền bo góc cắt mất nội dung */
+.is-shorts-overlay .yt-ext-hashtag {
+    top: auto !important;
+    bottom: 55px !important; /* Nằm ngay trên cụm "Bỏ Opacity" */
+    right: 10px !important;
+    left: auto !important;
+    transform: none !important;
+}
+
+/* Giữ nguyên form cũ cho các phần khác, không đẩy xuống nữa */
+.is-shorts-overlay .yt-ext-left-area {
+    padding-top: 0; 
 }
 
 /* Hashtag nhô lên trên đỉnh */
@@ -227,6 +240,12 @@
 
 ytd-thumbnail {
     position: relative !important;
+    overflow: visible !important; /* Giữ cho video dài nhãn nhô lên trên */
+}
+
+yt-thumbnail-view-model {
+    position: relative !important;
+    /* Không ép overflow cho Shorts để tránh lỗi layout */
 }
 
 /* --- MANUAL SELECTION (CHỌN THỦ CÔNG) --- */
