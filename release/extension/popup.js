@@ -123,7 +123,7 @@ function updateStatusLabel(isAutoChecked, maxCount) {
             status.textContent = `📡 Đang Quét (${maxCount})`;
             status.className = "status-active";
         } else {
-            status.textContent = "⏸️ Không Chọn (Max=0)";
+            status.textContent = "Mặc Định";
             status.className = "status-idle";
         }
     } else {

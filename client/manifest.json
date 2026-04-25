@@ -11,6 +11,9 @@
     "http://127.0.0.1:18282/*",
     "http://localhost:18282/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "Mở cài đặt tải YouTube"

@@ -47,19 +47,19 @@ chrome.storage.local.get(['ytConfig'], (data) => {
 // Lắng nghe lệnh từ Popup truyền đi (như Đổi Option hay Bấm Bulk Tải)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "UPDATE_CONFIG") {
-        currentConfig = parseConfig(request.config);
-
-        // Cập nhật trạng thái widget nổi
+        const newConfig = parseConfig(request.config);
+        const needsReset = JSON.stringify({ ...currentConfig, directMode: null }) !== JSON.stringify({ ...newConfig, directMode: null });
+        currentConfig = newConfig;
         if (currentConfig.directMode) {
             initFloatingWidget();
         } else {
             removeFloatingWidget();
         }
-
-        fullReset(); // Thực hiện reset hoàn toàn khi đổi cấu hình
-        showToast("🔄 Đã tự động cập nhật lại Lọc Video!", 2500);
+        if (needsReset) {
+            fullReset();
+            showToast("🔄 Đã cập nhật bộ lọc video!", 2500);
+        }
         sendResponse({ status: "ok" });
-
     } else if (request.action === "BULK_DOWNLOAD") {
         let count = 0;
         scanState.bulkDownloadItems.forEach((data, url) => {
@@ -76,25 +76,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
 });
 
-// Hàm reset trạng thái toàn cục (Dùng khi đổi trang hoặc đổi cấu hình)
-function fullReset() {
-    // Tạo một phiên quét mới hoàn toàn (Hồ sơ mới)
+async function fullReset() {
     scanState = {
         version: scanState.version + 1,
         validFoundCount: 0,
         bulkDownloadItems: new Map()
     };
-    isScanning = false;   // Phá khóa để luồng quét mới có thể chạy ngay lập tức
+
+    while (isScanning) {
+        await new Promise(r => setTimeout(r, 50));
+    }
 
     resetProcessedItems();
 
-    // Xóa bộ nhớ chọn thủ công khi chuyển trang hoặc đổi cấu hình
     manuallySelectedItems.clear();
     if (isManualSelectionMode) {
         showToast(`Giỏ hàng: 0 video thủ công.\n(Nhấn ENTER để Tải)`, 0);
     }
 
-    processVideos(); // Lập tức ép duyệt lại
+    processVideos();
 }
 
 // Hàm lấy "dấu vân tay" của nội dung hiện tại (dựa trên 3 video đầu tiên)
@@ -116,14 +116,16 @@ function getContentFingerprint() {
 
 // Bắt sự kiện chuyển hướng trang của YouTube (Single Page App)
 if (window.location.hostname.includes("youtube.com")) {
-    window.addEventListener('yt-navigate-finish', () => {
-        console.log("[YT-EXT] Phát hiện chuyển trang (Event), đang làm mới bộ lọc...");
-        fullReset();
-    });
-
     // Cơ chế Polling URL và Nội dung (Fingerprinting)
     let lastUrl = location.href;
     let lastFingerprint = getContentFingerprint();
+
+    window.addEventListener('yt-navigate-finish', () => {
+        console.log("[YT-EXT] Phát hiện chuyển trang (Event), đang làm mới bộ lọc...");
+        lastUrl = location.href;
+        lastFingerprint = getContentFingerprint();
+        fullReset();
+    });
 
     setInterval(() => {
         const currentUrl = location.href;
@@ -144,7 +146,7 @@ if (window.location.hostname.includes("youtube.com")) {
 
             lastUrl = currentUrl;
             lastFingerprint = currentFingerprint;
-            
+
             console.log(`[YT-EXT] Phát hiện thay đổi ${urlChanged ? 'URL' : 'Nội dung'}, đang làm mới bộ lọc...`);
             // Delay nhẹ 500ms để chờ Youtube Render sơ bộ nội dung mới
             setTimeout(fullReset, 500);
@@ -430,7 +432,7 @@ async function processVideos() {
                 if (videoId) {
                     try {
                         const hRes = await fetch(`http://127.0.0.1:18282/api/check_history?video_id=${videoId}`);
-                        
+
                         // KIỂM TRA PHIÊN QUÉT: Đề phòng reset trong lúc chờ fetch
                         if (myState !== scanState) return;
 
@@ -477,6 +479,8 @@ async function processVideos() {
                     thumbnail.classList.add('yt-ext-thumbnail-container');
                     const overlay = document.createElement('div');
                     let overlayClass = 'yt-ext-overlay ';
+                    if (isShort) overlayClass += 'is-shorts-overlay ';
+
                     if (isValid) {
                         overlayClass += 'is-valid item-selected';
                     } else {
@@ -556,10 +560,74 @@ async function processVideos() {
                     overlay.appendChild(opacityCtrl);
 
                     thumbnail.appendChild(overlay);
+                    // const stopEvents = ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart'];
 
-                    // NGĂN CLICK TRÔI XUỐNG DƯỚI (Phòng thủ trên từng nút bấm)
+                    // // 1. ĐẶC TRỊ CHO SHORTS (Chặn trực tiếp trên các thẻ <a> để không làm liệt nút bấm)
+                    // if (isShort) {
+                    //     const links = item.querySelectorAll('a');
+                    //     links.forEach(a => {
+                    //         stopEvents.forEach(ev => {
+                    //             a.addEventListener(ev, (e) => {
+                    //                 if (overlay.contains(e.target)) {
+                    //                     const isSelect = (e.target === qualitySelect || qualitySelect.contains(e.target));
+                    //                     const isCheckbox = (e.target.type === 'checkbox' || e.target.classList.contains('yt-ext-checkbox') || e.target.classList.contains('yt-ext-opacity-toggle'));
+
+                    //                     if (ev === 'click' || ev === 'mousedown') {
+                    //                         console.log(`[YT-EXT] [Shorts-Link] ${ev} | Target: ${e.target.className} | Select: ${isSelect} | CB: ${isCheckbox}`);
+                    //                     }
+
+                    //                     // Nếu click vào select hoặc checkbox, ta KHÔNG preventDefault ở đây 
+                    //                     // để trình duyệt xử lý hành vi mặc định (mở menu / tích chọn).
+                    //                     if (isSelect || isCheckbox) {
+                    //                         e.stopPropagation();
+                    //                         e.stopImmediatePropagation();
+                    //                     } else {
+                    //                         // Click vào nền hoặc nút khác: Chặn đứng hoàn toàn
+                    //                         e.preventDefault();
+                    //                         e.stopPropagation();
+                    //                         e.stopImmediatePropagation();
+                    //                     }
+                    //                 }
+                    //             }, { capture: true });
+                    //         });
+                    //     });
+                    // }
+
+                    // // 2. CHẶN TRÊN CÁC NÚT ĐIỀU KHIỂN (Xử lý nội bộ cho cả 2 loại)
+                    // [qualitySelect, mainCheckbox, dlBtn, opacityToggle].forEach(el => {
+                    //     if (!el) return;
+                    //     stopEvents.forEach(ev => {
+                    //         el.addEventListener(ev, (e) => {
+                    //             if (ev === 'click' || ev === 'mousedown') {
+                    //                 console.log(`[YT-EXT] [Control] ${ev} | Element: ${el.className}`);
+                    //             }
+
+                    //             e.stopPropagation();
+                    //             e.stopImmediatePropagation();
+
+                    //             if (ev === 'mousedown' && el === qualitySelect) {
+                    //                 if (qualitySelect.dataset.fetched !== "true" && qualitySelect.dataset.loading !== "true") {
+                    //                     e.preventDefault();
+                    //                     fetchVideoQualitiesFromClient(url, qualitySelect);
+                    //                 }
+                    //             }
+                    //         }, { capture: true });
+                    //     });
+                    // });
+
+                    // // 3. CHẶN TRÊN NỀN OVERLAY (Lớp bảo vệ cuối)
+                    // stopEvents.forEach(ev => {
+                    //     overlay.addEventListener(ev, (e) => {
+                    //         if (e.target === overlay) {
+                    //             e.stopPropagation();
+                    //             e.stopImmediatePropagation();
+                    //             e.preventDefault();
+                    //         }
+                    //     }, false); 
+                    // });
+
                     const stopEvents = ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup'];
-                    
+
                     // Chặn trên toàn bộ Overlay (vùng trống)
                     stopEvents.forEach(ev => {
                         overlay.addEventListener(ev, (e) => e.stopPropagation());
@@ -643,10 +711,7 @@ async function processVideos() {
     } catch (err) {
         console.error("[YT-EXT] Lỗi quét chính:", err);
     } finally {
-        // Chỉ mở khóa scanning nếu phiên quét này vẫn là phiên mới nhất
-        if (myState === scanState) {
-            isScanning = false;
-        }
+        isScanning = false; // Luôn trả lại khóa để các luồng khác (đang đợi) có thể vào
     }
 }
 
@@ -908,7 +973,7 @@ function initFloatingWidget() {
                 .widget-close:hover { color: #f87171; }
                 .widget-body { padding: 10px; }
                 #yt-ext-direct-links {
-                    width: 100%; height: 80px; resize: none; background: rgba(0,0,0,0.4);
+                    width: 100%; height: 150px; resize: none; background: rgba(0,0,0,0.4);
                     color: #e4e4e7; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
                     padding: 8px; font-size: 11px; box-sizing: border-box; outline: none;
                 }
@@ -1030,13 +1095,15 @@ function updateLinkCount() {
 
 function extractYTLinks(text) {
     if (!text) return [];
-    // Tách theo dòng hoặc dấu cách, gạn lọc link
     const tokens = text.split(/[\s\n]+/);
     const validLinks = new Set();
     tokens.forEach(str => {
-        // Rút ngắn kiểm tra link yt
-        if (str.includes('youtube.com/watch') || str.includes('youtu.be/')) {
-            validLinks.add(str.trim());
+        const s = str.trim();
+        // Bổ sung thêm kiểm tra /shorts/
+        if (s.includes('youtube.com/watch') ||
+            s.includes('youtu.be/') ||
+            s.includes('youtube.com/shorts/')) {
+            validLinks.add(s);
         }
     });
     return Array.from(validLinks);

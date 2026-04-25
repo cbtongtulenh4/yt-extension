@@ -10,6 +10,7 @@ let scanState = {
 };
 
 let videoQualitiesCache = new Map(); // Cache lưu quality từ server: URL => [2160, 1080, ...]
+let scanInterval;
 
 // ==========================================
 // TOAST THÔNG BÁO UI
@@ -31,18 +32,39 @@ function showToast(msg, duration = 3000) {
 // ==========================================
 // KHỞI ĐỘNG CƠ CHẾ QUÉT NỀN LIÊN TỤC
 // ==========================================
-chrome.storage.local.get(['ytConfig'], (data) => {
-    if (data.ytConfig) {
-        currentConfig = parseConfig(data.ytConfig);
-        if (currentConfig.directMode) {
-            initFloatingWidget();
+function startScanning(windowId) {
+    const configKeys = ['ytConfig'];
+    if (windowId) configKeys.push(`ytConfig_${windowId}`);
+
+    chrome.storage.local.get(configKeys, (data) => {
+        const config = (windowId && data[`ytConfig_${windowId}`]) || data.ytConfig;
+        if (config) {
+            currentConfig = parseConfig(config);
+            if (currentConfig.directMode) {
+                initFloatingWidget();
+            }
         }
-    }
-    // Ghim lặp liên tục mỗi 2s để đắp giao diện (Chỉ trên YouTube)
-    if (window.location.hostname.includes("youtube.com")) {
-        scanInterval = setInterval(processVideos, 2000);
-    }
-});
+        // Ghim lặp liên tục mỗi 2s để đắp giao diện (Chỉ trên YouTube)
+        if (window.location.hostname.includes("youtube.com")) {
+            if (scanInterval) clearInterval(scanInterval);
+            scanInterval = setInterval(processVideos, 2000);
+            console.log(`[YT-EXT] Đã bắt đầu quét nền (WindowID: ${windowId || 'Global'})`);
+        }
+    });
+}
+
+// Cố gắng lấy Window ID từ background (Cần reload extension để background.js hoạt động)
+try {
+    chrome.runtime.sendMessage({ action: "GET_WINDOW_ID" }, (response) => {
+        const windowId = response ? response.windowId : null;
+        startScanning(windowId);
+    });
+} catch (e) {
+    // Nếu chưa reload extension, background.js sẽ chưa sẵn sàng -> dùng fallback
+    console.warn("[YT-EXT] Background script chưa sẵn sàng, dùng cấu hình mặc định.");
+    startScanning(null);
+}
+
 
 // Lắng nghe lệnh từ Popup truyền đi (như Đổi Option hay Bấm Bulk Tải)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -501,11 +523,11 @@ async function processVideos() {
                         hashtag.innerText = 'Downloaded';
                         hashtag.style.backgroundColor = 'rgba(107, 114, 128, 0.9)'; // Màu xám
                         hashtag.classList.add('is-downloaded');
-                    } else {
+                    } else if (meetsRequirements) {
                         hashtag.innerText = '#READY';
                         hashtag.style.backgroundColor = 'rgba(34, 197, 94, 0.9)'; // Màu xanh
                     }
-                    if (isValid || isInHistory) overlay.appendChild(hashtag);
+                    if (meetsRequirements || isInHistory) overlay.appendChild(hashtag);
 
                     // THÔNG TIN
                     const leftArea = document.createElement('div');
@@ -1095,13 +1117,15 @@ function updateLinkCount() {
 
 function extractYTLinks(text) {
     if (!text) return [];
-    // Tách theo dòng hoặc dấu cách, gạn lọc link
     const tokens = text.split(/[\s\n]+/);
     const validLinks = new Set();
     tokens.forEach(str => {
-        // Rút ngắn kiểm tra link yt
-        if (str.includes('youtube.com/watch') || str.includes('youtu.be/')) {
-            validLinks.add(str.trim());
+        const s = str.trim();
+        // Bổ sung thêm kiểm tra /shorts/
+        if (s.includes('youtube.com') || s.includes('youtube.com/watch') ||
+            s.includes('youtu.be/') ||
+            s.includes('youtube.com/shorts/')) {
+            validLinks.add(s);
         }
     });
     return Array.from(validLinks);

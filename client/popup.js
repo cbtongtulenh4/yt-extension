@@ -1,25 +1,33 @@
+let currentWindowId = null;
+
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Khôi phục cấu hình
-    chrome.storage.local.get(['ytConfig'], (data) => {
-        if (data.ytConfig) {
-            document.getElementById('config-check-quality').checked = data.ytConfig.checkQuality !== undefined ? data.ytConfig.checkQuality : true;
-            document.getElementById('config-quality').value = data.ytConfig.quality || '1080';
-            document.getElementById('config-check-len').checked = data.ytConfig.checkLen !== undefined ? data.ytConfig.checkLen : true;
-            document.getElementById('config-min-len').value = data.ytConfig.minLen !== undefined ? data.ytConfig.minLen : 0;
-            document.getElementById('config-max-len').value = data.ytConfig.maxLen !== undefined ? data.ytConfig.maxLen : 60;
-            document.getElementById('config-check-views').checked = data.ytConfig.checkViews !== undefined ? data.ytConfig.checkViews : true;
-            document.getElementById('config-min-view').value = data.ytConfig.minViewFormat || '100K';
-            document.getElementById('config-check-time').checked = data.ytConfig.checkTime !== undefined ? data.ytConfig.checkTime : true;
-            document.getElementById('config-max-days').value = data.ytConfig.maxDays !== undefined ? data.ytConfig.maxDays : 30;
-            document.getElementById('config-check-auto').checked = data.ytConfig.checkAuto !== undefined ? data.ytConfig.checkAuto : false;
-            document.getElementById('config-max-count').value = data.ytConfig.maxCount !== undefined ? data.ytConfig.maxCount : 0;
-            document.getElementById('config-only-valid').checked = data.ytConfig.onlyValid !== undefined ? data.ytConfig.onlyValid : false;
-            document.getElementById('config-direct-mode').checked = data.ytConfig.directMode !== undefined ? data.ytConfig.directMode : false;
-            updateStatusLabel(data.ytConfig.checkAuto !== undefined ? data.ytConfig.checkAuto : false, data.ytConfig.maxCount !== undefined ? data.ytConfig.maxCount : 0);
-        } else {
-            // Save defaults
-            saveAndSyncConfig();
-        }
+    chrome.windows.getCurrent((win) => {
+        currentWindowId = win.id;
+        const configKey = `ytConfig_${currentWindowId}`;
+
+        // 1. Khôi phục cấu hình (Ưu tiên cấu hình riêng của cửa sổ, nếu không có thì dùng cấu hình chung)
+        chrome.storage.local.get([configKey, 'ytConfig'], (data) => {
+            const config = data[configKey] || data.ytConfig;
+            if (config) {
+                document.getElementById('config-check-quality').checked = config.checkQuality !== undefined ? config.checkQuality : true;
+                document.getElementById('config-quality').value = config.quality || '1080';
+                document.getElementById('config-check-len').checked = config.checkLen !== undefined ? config.checkLen : true;
+                document.getElementById('config-min-len').value = config.minLen !== undefined ? config.minLen : 0;
+                document.getElementById('config-max-len').value = config.maxLen !== undefined ? config.maxLen : 60;
+                document.getElementById('config-check-views').checked = config.checkViews !== undefined ? config.checkViews : true;
+                document.getElementById('config-min-view').value = config.minViewFormat || '100K';
+                document.getElementById('config-check-time').checked = config.checkTime !== undefined ? config.checkTime : true;
+                document.getElementById('config-max-days').value = config.maxDays !== undefined ? config.maxDays : 30;
+                document.getElementById('config-check-auto').checked = config.checkAuto !== undefined ? config.checkAuto : false;
+                document.getElementById('config-max-count').value = config.maxCount !== undefined ? config.maxCount : 0;
+                document.getElementById('config-only-valid').checked = config.onlyValid !== undefined ? config.onlyValid : false;
+                document.getElementById('config-direct-mode').checked = config.directMode !== undefined ? config.directMode : false;
+                updateStatusLabel(config.checkAuto !== undefined ? config.checkAuto : false, config.maxCount !== undefined ? config.maxCount : 0);
+            } else {
+                // Save defaults
+                saveAndSyncConfig();
+            }
+        });
     });
 
     // 2. Tự động sync (cập nhật) mỗi khi User thay đổi bất kì thông số nào trên box
@@ -103,18 +111,26 @@ function saveAndSyncConfig() {
     // Cập nhật nhãn trạng thái cục bộ dựa trên checkbox Auto
     updateStatusLabel(isAutoChecked, safeMaxVal);
 
-    chrome.storage.local.set({ ytConfig: newConfig }, () => {
-        // Sync xuống Tab đang mở
-        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-            if (tabs.length > 0 && tabs[0].url) {
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    action: "UPDATE_CONFIG",
-                    config: newConfig
-                }).catch(() => { });
-            }
+    const storageData = { ytConfig: newConfig }; // Lưu làm mặc định chung
+    if (currentWindowId) {
+        storageData[`ytConfig_${currentWindowId}`] = newConfig; // Lưu riêng cho cửa sổ này
+    }
+
+    chrome.storage.local.set(storageData, () => {
+        // Sync xuống TẤT CẢ các Tab trong cửa sổ hiện tại
+        chrome.tabs.query({ windowId: currentWindowId }, function (tabs) {
+            tabs.forEach(tab => {
+                if (tab.url && tab.url.includes("youtube.com")) {
+                    chrome.tabs.sendMessage(tab.id, {
+                        action: "UPDATE_CONFIG",
+                        config: newConfig
+                    }).catch(() => { });
+                }
+            });
         });
     });
 }
+
 
 function updateStatusLabel(isAutoChecked, maxCount) {
     const status = document.getElementById('scan-status');
@@ -123,7 +139,7 @@ function updateStatusLabel(isAutoChecked, maxCount) {
             status.textContent = `📡 Đang Quét (${maxCount})`;
             status.className = "status-active";
         } else {
-            status.textContent = "⏸️ Không Chọn (Max=0)";
+            status.textContent = "Mặc Định";
             status.className = "status-idle";
         }
     } else {
